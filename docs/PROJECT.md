@@ -19,7 +19,9 @@ warstwy DOM lub platformy.
 ## Docelowy zakres pierwszego prototypu
 
 - tekst wpisany albo wklejony do natywnego pola rozmowy,
-- lokalna detekcja PESEL, praktycznych adresów e-mail i polskich telefonów,
+- lokalna detekcja PESEL, praktycznych adresów e-mail, polskich telefonów oraz
+  jawnych pól `patientName`, `patientFirstName`, `patientLastName`, `patientId`
+  i `password`,
 - lista propozycji z typem, ukrytym podglądem i decyzją,
 - ręczne wskazanie dodatkowego fragmentu,
 - deterministyczne rozstrzyganie nakładających się zakresów,
@@ -32,24 +34,30 @@ zawsze opisany w `STATUS.md`.
 
 ## Kierunek rozwoju detekcji
 
-Obecnie działają detektory PESEL-u, praktycznych adresów e-mail i polskich
-numerów telefonu oraz ręczne maskowanie wskazanego fragmentu. Ich rzeczywisty
-zakres i dowody są kanonicznie opisane w `STATUS.md`.
+Obecnie działają detektory PESEL-u, praktycznych adresów e-mail, polskich
+numerów telefonu oraz wartości dokładnych pól `patientName`,
+`patientFirstName`, `patientLastName`, `patientId` i `password` w ograniczonych
+strukturach. Dostępne jest też ręczne maskowanie wskazanego fragmentu.
+Rzeczywisty zakres i dowody są kanonicznie opisane w `STATUS.md`.
 
-Kandydatami do kolejnych, osobno zatwierdzanych etapów są rozpoznawalne pola
-identyfikujące pacjenta oraz sekrety techniczne, takie jak tokeny, nagłówki
-`Authorization` i hasła występujące w jednoznacznych strukturach logów lub
-JSON. Dowolnego hasła w swobodnym zdaniu nie należy przedstawiać jako możliwego
-do niezawodnego wykrycia. Najpierw potrzebny jest syntetyczny zestaw przypadków,
-który pokaże zarówno wykrycia, jak i pominięcia oraz fałszywe alarmy.
+Syntetyczny zestaw MED-001 mierzy obecne wykrycia, pominięcia i fałszywe alarmy;
+wyniki i uzasadnienie kolejności są w
+[`MEDICAL_EVALUATION.md`](MEDICAL_EVALUATION.md). Jawne pola pacjenta są
+obsługiwane w wąskim zakresie MED-002, a MED-003 dodaje dokładne pola imienia,
+nazwiska i hasła. Następnym kandydatem jest korekta granic istniejącego
+detektora e-mail dla logów i URI, a potem pozostałe kontekstowe sekrety
+techniczne. Rozszerzanie nazw pacjentów poza jawne pola wymaga osobnego korpusu
+negatywnego. Każda pozycja wymaga osobno zatwierdzonego etapu. Dowolnego hasła
+lub nazwiska w swobodnym zdaniu nie należy przedstawiać jako możliwego do
+niezawodnego wykrycia.
 
 Ten kierunek nie oznacza, że wymienione detektory, pilotaż lub pakiet
 instalacyjny są już zaimplementowane.
 
 ## Poza pierwszym prototypem
 
-- automatyczna detekcja nazwisk,
-- pola strukturalne typu `patientName`,
+- automatyczna detekcja imion i nazwisk poza dokładnymi polami pacjenta,
+- aliasy i złożone reprezentacje pól identyfikujących pacjenta,
 - pliki, PDF, OCR, obrazy i głos,
 - backend, własna historia rozmów i odczyt całej strony,
 - LLM używany do detekcji,
@@ -75,7 +83,7 @@ natywny edytor ── content script ── czyste detektory i zakresy
 | Katalog | Odpowiedzialność | Czego nie zna |
 | --- | --- | --- |
 | `src/core` | typy, zakresy, podglądy i podmiany | React, Chrome, DOM |
-| `src/detectors` | czyste reguły PESEL, e-mail i telefonu | UI, Chrome, DOM |
+| `src/detectors` | czyste reguły danych kontaktowych i pól pacjenta | UI, Chrome, DOM |
 | `src/app` | panel i stan interakcji | selektory ChatGPT |
 | `src/platform/chromium` | komunikaty, manifestowe API i przyszły storage | reguły detekcji |
 | `src/providers/chatgpt` | odczyt, obserwacja i podmiana w natywnym edytorze | React panelu |

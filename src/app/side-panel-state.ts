@@ -61,12 +61,22 @@ export const detectionLabels: Record<DetectionSummary["kind"], string> = {
   PESEL: "PESEL",
   EMAIL: "E-mail",
   PHONE: "Telefon",
+  PATIENT_NAME: "Imię i nazwisko pacjenta",
+  PATIENT_FIRST_NAME: "Imię pacjenta",
+  PATIENT_LAST_NAME: "Nazwisko pacjenta",
+  PATIENT_ID: "Identyfikator pacjenta",
+  PASSWORD: "Hasło",
 };
 
 const maskedDataLabels: Record<DetectionSummary["kind"], string> = {
   PESEL: "PESEL",
   EMAIL: "e-mail",
   PHONE: "telefon",
+  PATIENT_NAME: "imię i nazwisko pacjenta",
+  PATIENT_FIRST_NAME: "imię pacjenta",
+  PATIENT_LAST_NAME: "nazwisko pacjenta",
+  PATIENT_ID: "identyfikator pacjenta",
+  PASSWORD: "hasło",
 };
 
 const MASK_CONFIRMATION_FAILED =

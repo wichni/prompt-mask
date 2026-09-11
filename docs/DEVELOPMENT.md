@@ -49,6 +49,7 @@ npm ci
 npm run dev
 npm run typecheck
 npm test
+npm run test:medical
 npm run build
 git diff --check
 ```
@@ -60,6 +61,11 @@ Plik [`.nvmrc`](../.nvmrc) wskazuje rodzinę Node.js używaną lokalnie i w CI.
 `npm run build` tworzy `dist`, buduje panel oraz samodzielne skrypty rozszerzenia
 i sprawdza odwołania manifestu. `dist` jest artefaktem lokalnym i nie jest
 śledzony przez Git.
+
+`npm run test:medical` uruchamia wersjonowany syntetyczny korpus MED-001.
+Metoda, baza i wyniki są opisane w
+[`MEDICAL_EVALUATION.md`](MEDICAL_EVALUATION.md); test należy także do zwykłego
+`npm test` i istniejącego CI.
 
 ## Continuous Integration
 

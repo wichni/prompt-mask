@@ -103,6 +103,51 @@ describe("side panel", () => {
     ]);
   });
 
+  it("shows structured patient-data categories without receiving raw values", () => {
+    emit({ type: "HOST_STATUS", state: "READY" });
+    emit({
+      type: "ANALYSIS_SNAPSHOT",
+      sessionId,
+      revision: 1,
+      length: 50,
+      detections: [
+        {
+          id: "PATIENT_NAME:16:28",
+          kind: "PATIENT_NAME",
+          maskedPreview: "•••",
+        },
+        {
+          id: "PATIENT_ID:41:50",
+          kind: "PATIENT_ID",
+          maskedPreview: "•••",
+        },
+        {
+          id: "PATIENT_FIRST_NAME:1:4",
+          kind: "PATIENT_FIRST_NAME",
+          maskedPreview: "•••",
+        },
+        {
+          id: "PATIENT_LAST_NAME:5:13",
+          kind: "PATIENT_LAST_NAME",
+          maskedPreview: "•••",
+        },
+        {
+          id: "PASSWORD:14:27",
+          kind: "PASSWORD",
+          maskedPreview: "•••",
+        },
+      ],
+    });
+
+    expect(container.textContent).toContain("Imię i nazwisko pacjenta");
+    expect(container.textContent).toContain("Identyfikator pacjenta");
+    expect(container.textContent).toContain("Imię pacjenta");
+    expect(container.textContent).toContain("Nazwisko pacjenta");
+    expect(container.textContent).toContain("Hasło");
+    expect(container.textContent).not.toContain("Żaneta Próba");
+    expect(container.textContent).not.toContain("PT-Z19-44");
+  });
+
   it("enables manual masking with zero detections and confirms only after rescan", () => {
     emit({ type: "HOST_STATUS", state: "READY" });
     emit({

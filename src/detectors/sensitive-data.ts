@@ -3,6 +3,7 @@ import {
   type DetectionKind,
   type SensitiveDetection,
 } from "../core/detection";
+import { detectStructuredSensitiveData } from "./structured-sensitive-data";
 
 const EMAIL_PATTERN = /[a-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[a-z0-9!#$%&'*+/=?^_`{|}~-]+)*@[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+/giu;
 const PESEL_PATTERN = /\d{11}/gu;
@@ -87,13 +88,19 @@ const collectMatches = (
 
 const priority: Record<DetectionKind, number> = {
   PESEL: 0,
-  EMAIL: 1,
-  PHONE: 2,
+  PATIENT_NAME: 1,
+  PATIENT_FIRST_NAME: 1,
+  PATIENT_LAST_NAME: 1,
+  PATIENT_ID: 1,
+  PASSWORD: 1,
+  EMAIL: 2,
+  PHONE: 3,
 };
 
 export const detectSensitiveData = (text: string): SensitiveDetection[] => {
   const candidates = [
     ...collectMatches(text, PESEL_PATTERN, "PESEL", isValidPesel),
+    ...detectStructuredSensitiveData(text),
     ...collectMatches(text, EMAIL_PATTERN, "EMAIL", () => true, isEmailBounded),
     ...collectMatches(text, PHONE_PATTERN, "PHONE"),
   ].sort(

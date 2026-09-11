@@ -54,6 +54,11 @@ describe("side panel state", () => {
       PESEL: "PESEL",
       EMAIL: "E-mail",
       PHONE: "Telefon",
+      PATIENT_NAME: "Imię i nazwisko pacjenta",
+      PATIENT_FIRST_NAME: "Imię pacjenta",
+      PATIENT_LAST_NAME: "Nazwisko pacjenta",
+      PATIENT_ID: "Identyfikator pacjenta",
+      PASSWORD: "Hasło",
     });
   });
 

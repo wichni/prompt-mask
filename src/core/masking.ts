@@ -21,6 +21,15 @@ export const createMaskedPreview = (
   detection: SensitiveDetection,
 ): string => {
   if (detection.kind === "EMAIL") return maskEmail(detection.value);
+  if (
+    detection.kind === "PATIENT_NAME" ||
+    detection.kind === "PATIENT_FIRST_NAME" ||
+    detection.kind === "PATIENT_LAST_NAME" ||
+    detection.kind === "PATIENT_ID" ||
+    detection.kind === "PASSWORD"
+  ) {
+    return MASK;
+  }
   const digits = detection.value.replace(/\D/gu, "");
   if (detection.kind === "PHONE") return `${MASK} ${MASK} ${digits.slice(-3)}`;
   return `${"•".repeat(9)}${digits.slice(-2)}`;
@@ -121,6 +130,11 @@ export const createMaskingPlan = (
     PESEL: nextPlaceholderNumber("PESEL", text),
     EMAIL: nextPlaceholderNumber("EMAIL", text),
     PHONE: nextPlaceholderNumber("PHONE", text),
+    PATIENT_NAME: nextPlaceholderNumber("PATIENT_NAME", text),
+    PATIENT_FIRST_NAME: nextPlaceholderNumber("PATIENT_FIRST_NAME", text),
+    PATIENT_LAST_NAME: nextPlaceholderNumber("PATIENT_LAST_NAME", text),
+    PATIENT_ID: nextPlaceholderNumber("PATIENT_ID", text),
+    PASSWORD: nextPlaceholderNumber("PASSWORD", text),
   };
   const replacements = [...detections]
     .sort((left, right) => left.start - right.start)
@@ -147,7 +161,8 @@ export const replaceDetection = (
   );
 };
 
-const GENERATED_PLACEHOLDER = /\[(?:PESEL|EMAIL|PHONE|DANE)_\d+\]/gu;
+const GENERATED_PLACEHOLDER =
+  /\[(?:PESEL|EMAIL|PHONE|PATIENT_NAME|PATIENT_FIRST_NAME|PATIENT_LAST_NAME|PATIENT_ID|PASSWORD|DANE)_\d+\]/gu;
 
 const overlapsGeneratedPlaceholder = (
   text: string,

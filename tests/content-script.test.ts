@@ -155,6 +155,48 @@ describe("native composer analysis", () => {
     );
   });
 
+  it("masks structured patient fields without forwarding their values", () => {
+    const textarea = document.querySelector<HTMLTextAreaElement>("textarea")!;
+    textarea.value =
+      '{"patientName":"Żaneta Próba","patientFirstName":"Iga","patientLastName":"Modelowa","patientId":"PT-Z19-44","password":"P@ss-demo-7!Q","error":"E_17"}';
+    const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
+    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    const snapshot = snapshots(panel).at(-1)!;
+
+    expect(snapshot.detections.map(({ kind }) => kind)).toEqual([
+      "PATIENT_NAME",
+      "PATIENT_FIRST_NAME",
+      "PATIENT_LAST_NAME",
+      "PATIENT_ID",
+      "PASSWORD",
+    ]);
+    expect(JSON.stringify(panel.postMessage.mock.calls)).not.toContain(
+      "Żaneta Próba",
+    );
+    expect(JSON.stringify(panel.postMessage.mock.calls)).not.toContain("Iga");
+    expect(JSON.stringify(panel.postMessage.mock.calls)).not.toContain(
+      "Modelowa",
+    );
+    expect(JSON.stringify(panel.postMessage.mock.calls)).not.toContain(
+      "PT-Z19-44",
+    );
+    expect(JSON.stringify(panel.postMessage.mock.calls)).not.toContain(
+      "P@ss-demo-7!Q",
+    );
+
+    panel.fireMessage({
+      type: "MASK_DETECTIONS",
+      sessionId: snapshot.sessionId,
+      revision: snapshot.revision,
+      detectionIds: snapshot.detections.map(({ id }) => id),
+    });
+
+    expect(textarea.value).toBe(
+      '{"patientName":"[PATIENT_NAME_1]","patientFirstName":"[PATIENT_FIRST_NAME_1]","patientLastName":"[PATIENT_LAST_NAME_1]","patientId":"[PATIENT_ID_1]","password":"[PASSWORD_1]","error":"E_17"}',
+    );
+    expect(() => JSON.parse(textarea.value)).not.toThrow();
+  });
+
   it("rescans the native field after a user input event", () => {
     const textarea = document.querySelector<HTMLTextAreaElement>("textarea")!;
     const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);

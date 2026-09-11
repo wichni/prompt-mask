@@ -14,12 +14,47 @@ describe("panel message boundary", () => {
         type: "ANALYSIS_SNAPSHOT",
         sessionId,
         revision: 2,
-        length: 31,
+        length: 60,
         detections: [
-          { id: "EMAIL:10:31", kind: "EMAIL", maskedPreview: "a•••@e•••.com" },
+          {
+            id: "PATIENT_NAME:10:22",
+            kind: "PATIENT_NAME",
+            maskedPreview: "•••",
+          },
+          {
+            id: "PATIENT_ID:35:44",
+            kind: "PATIENT_ID",
+            maskedPreview: "•••",
+          },
+          {
+            id: "PATIENT_FIRST_NAME:45:48",
+            kind: "PATIENT_FIRST_NAME",
+            maskedPreview: "•••",
+          },
+          {
+            id: "PATIENT_LAST_NAME:49:57",
+            kind: "PATIENT_LAST_NAME",
+            maskedPreview: "•••",
+          },
+          {
+            id: "PASSWORD:20:33",
+            kind: "PASSWORD",
+            maskedPreview: "•••",
+          },
         ],
       }),
     ).toBe(true);
+    expect(
+      isPanelEvent({
+        type: "ANALYSIS_SNAPSHOT",
+        sessionId,
+        revision: 2,
+        length: 10,
+        detections: [
+          { id: "SECRET:0:6", kind: "SECRET", maskedPreview: "•••" },
+        ],
+      }),
+    ).toBe(false);
   });
 
   it("rejects an analysis snapshot containing raw text", () => {
@@ -44,8 +79,24 @@ describe("panel message boundary", () => {
     };
 
     expect(isPanelCommand(command)).toBe(true);
+    expect(
+      isPanelCommand({
+        ...command,
+        detectionIds: [
+          "PATIENT_FIRST_NAME:1:4",
+          "PATIENT_LAST_NAME:5:13",
+          "PASSWORD:14:27",
+        ],
+      }),
+    ).toBe(true);
     expect(isPanelCommand({ ...command, text: "leak" })).toBe(false);
     expect(isPanelCommand({ ...command, detectionIds: [] })).toBe(false);
+    expect(
+      isPanelCommand({ ...command, detectionIds: ["SECRET:7:18"] }),
+    ).toBe(false);
+    expect(
+      isPanelCommand({ ...command, detectionIds: ["PATIENT_ID:18:7"] }),
+    ).toBe(false);
     expect(isPanelCommand({ ...command, sessionId: "reused-counter" })).toBe(
       false,
     );

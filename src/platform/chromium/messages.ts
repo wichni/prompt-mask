@@ -154,15 +154,36 @@ export const isDraftSessionId = (value: unknown): value is DraftSessionId =>
   );
 
 const isDetectionKind = (value: unknown): value is DetectionKind =>
-  value === "PESEL" || value === "EMAIL" || value === "PHONE";
+  value === "PESEL" ||
+  value === "EMAIL" ||
+  value === "PHONE" ||
+  value === "PATIENT_NAME" ||
+  value === "PATIENT_FIRST_NAME" ||
+  value === "PATIENT_LAST_NAME" ||
+  value === "PATIENT_ID" ||
+  value === "PASSWORD";
+
+const isDetectionId = (value: unknown): value is string => {
+  if (typeof value !== "string") return false;
+  const match = /^([A-Z_]+):(\d+):(\d+)$/u.exec(value);
+  if (!match || !isDetectionKind(match[1])) return false;
+  const start = Number(match[2]);
+  const end = Number(match[3]);
+  return (
+    Number.isSafeInteger(start) &&
+    Number.isSafeInteger(end) &&
+    start >= 0 &&
+    start < end &&
+    end <= MAX_TEXT_LENGTH
+  );
+};
 
 const isDetectionSummary = (value: unknown): value is DetectionSummary =>
   isRecord(value) &&
   hasExactKeys(value, ["id", "kind", "maskedPreview"]) &&
-  typeof value.id === "string" &&
+  isDetectionId(value.id) &&
   isDetectionKind(value.kind) &&
   value.id.startsWith(`${value.kind}:`) &&
-  /^[A-Z]+:\d+:\d+$/u.test(value.id) &&
   typeof value.maskedPreview === "string" &&
   value.maskedPreview.length <= 80;
 
@@ -172,9 +193,7 @@ const isDetectionIds = (value: unknown): value is string[] =>
   value.length <= MAX_TEXT_LENGTH &&
   new Set(value).size === value.length &&
   value.every(
-    (detectionId) =>
-      typeof detectionId === "string" &&
-      /^[A-Z]+:\d+:\d+$/u.test(detectionId),
+    (detectionId) => isDetectionId(detectionId),
   );
 
 export const isSupportedChatGptUrl = (value: string): boolean => {

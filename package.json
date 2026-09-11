@@ -7,6 +7,7 @@
     "build": "node scripts/build.mjs",
     "dev": "vite",
     "test": "vitest run",
+    "test:medical": "vitest run tests/medical-corpus.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

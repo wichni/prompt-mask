@@ -7,6 +7,7 @@ Ten indeks służy do wczytywania tylko potrzebnego kontekstu.
 | Aktualny stan, dowody i blokery | [`STATUS.md`](STATUS.md) |
 | Cel, kierunek produktu i granice modułów | [`PROJECT.md`](PROJECT.md) |
 | Dane, zaufanie i zagrożenia | [`SECURITY.md`](SECURITY.md) |
+| Syntetyczny korpus medyczny i wyniki detekcji | [`MEDICAL_EVALUATION.md`](MEDICAL_EVALUATION.md) |
 | Implementacja, testy, etapy i praca z kontekstem | [`DEVELOPMENT.md`](DEVELOPMENT.md) |
 | Instalacja i użycie | [`../README.md`](../README.md) |
 | Reguły pracy agenta | [`../AGENTS.md`](../AGENTS.md) |

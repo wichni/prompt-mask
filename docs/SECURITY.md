@@ -111,7 +111,7 @@ wysłać surowy tekst, dlatego UI nie może sugerować pełnej ochrony.
 | globalna podmiana wartości | zakresy `[start, end)` i składanie tekstu bez globalnego `replace()` |
 | wyciek ręcznie wskazanej wartości | treść wyboru zostaje w content scripcie; panel dostaje tylko stan i liczbowy identyfikator |
 | użycie ukrytego starego wyboru | rekord pola, URL, rewizji i monotonicznych generacji; edycja i nowy wybór unieważniają poprzedni |
-| zagnieżdżenie oznaczeń | ręczny zakres nachodzący na `[PESEL_N]`, `[EMAIL_N]`, `[PHONE_N]` lub `[DANE_N]` jest odrzucany |
+| zagnieżdżenie oznaczeń | ręczny zakres nachodzący na oznaczenie PESEL, e-maila, telefonu, pól pacjenta, hasła lub `[DANE_N]` jest odrzucany |
 | programowe uruchomienie ikonki przez stronę | zamknięty Shadow DOM i akceptowanie wyłącznie zaufanego zdarzenia użytkownika |
 | usunięcie lub imitacja ikonki przez stronę | ikonka nie jest kontrolką bezpieczeństwa; panel rozszerzenia pozostaje kanoniczną alternatywą |
 | wyciek przez logi | brak logowania payloadów i wykrytych wartości |
@@ -127,9 +127,19 @@ wysłać surowy tekst, dlatego UI nie może sugerować pełnej ochrony.
 - PESEL: 11 cyfr, poprawna zakodowana data i suma kontrolna,
 - e-mail: praktyczny adres z domeną wieloczłonową,
 - telefon: dziewięć cyfr, opcjonalne `+48`, spacje albo myślniki.
+- nazwa pacjenta: wartość dokładnego pola `patientName`, `patientFirstName` lub
+  `patientLastName` w JSON albo cytowanym przypisaniu `klucz=wartość`; bez
+  zgadywania nazw w swobodnym tekście,
+- identyfikator pacjenta: wartość dokładnego pola `patientId` w JSON albo
+  przypisaniu `klucz=wartość`,
+- hasło: wartość dokładnego pola `password` w JSON albo przypisaniu
+  `klucz=wartość`; samo słowo `password` nie jest wykryciem.
 
-Detektory heurystyczne mogą generować fałszywe alarmy i pominięcia. Decyzja
-zawsze należy do użytkownika.
+Pola strukturalne są rozpoznawane wyłącznie w ograniczonym formacie i nie
+obsługują dowolnych aliasów, złożonych ucieczek ani sekretów bez jawnej nazwy
+pola. Dla pól pacjenta i hasła panel otrzymuje stały podgląd `•••`, bez inicjałów
+i końcówki wartości. Detektory heurystyczne mogą generować fałszywe alarmy i
+pominięcia. Decyzja zawsze należy do użytkownika.
 
 ## Checklist zmiany granicy
 

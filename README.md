@@ -9,7 +9,9 @@ zaznaczenie.
 
 1. Użytkownik pisze normalnie w polu ChatGPT.
 2. Content script lokalnie analizuje bieżący tekst.
-3. Panel pokazuje możliwy PESEL, adres e-mail albo polski numer telefonu.
+3. Panel pokazuje możliwy PESEL, adres e-mail, polski numer telefonu albo
+   wartość jawnego pola `patientName`, `patientFirstName`, `patientLastName`,
+   `patientId` lub `password` w JSON i formacie `klucz=wartość`.
 4. „Maskuj” zastępuje wyłącznie aktualny wykryty zakres oznaczeniem, np.
    `[PESEL_1]`.
 5. „Maskuj wszystkie wykryte (N)” zatwierdza dokładnie aktualną listę i wykonuje
@@ -83,6 +85,25 @@ odśwież stronę ChatGPT.
 ## Ręczny odbiór bieżącego etapu
 
 Używaj wyłącznie danych utworzonych na potrzeby testu.
+
+Przed pozostałymi scenariuszami wpisz:
+
+```json
+{"patientName":"Żaneta Próba","patientFirstName":"Iga","patientLastName":"Modelowa","patientId":"PT-Z19-44","password":"P@ss-demo-7!Q","error":"E_17"}
+```
+
+Panel powinien pokazać pięć propozycji bez pełnych wartości: pełną nazwę, imię,
+nazwisko, identyfikator pacjenta i hasło. Zbiorcze maskowanie ma pozostawić
+poprawny JSON:
+
+```json
+{"patientName":"[PATIENT_NAME_1]","patientFirstName":"[PATIENT_FIRST_NAME_1]","patientLastName":"[PATIENT_LAST_NAME_1]","patientId":"[PATIENT_ID_1]","password":"[PASSWORD_1]","error":"E_17"}
+```
+
+Swobodne zdanie `Pacjentka Żaneta Próba` nie powinno zostać automatycznie
+zaklasyfikowane jako nazwa pacjenta. Niejednoznaczne `patientName=Jan Testowy`
+bez cudzysłowów również ma pozostać bez automatycznej propozycji. Samo słowo
+`password` bez wartości nie jest wykryciem.
 
 1. Wpisz do zwykłego pola ChatGPT syntetyczny e-mail, telefon i poprawny PESEL.
 2. Sprawdź biało-niebieską paletę, trzy propozycje, licznik oraz aktywne

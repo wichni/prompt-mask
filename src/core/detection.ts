@@ -1,4 +1,12 @@
-export type DetectionKind = "PESEL" | "EMAIL" | "PHONE";
+export type DetectionKind =
+  | "PESEL"
+  | "EMAIL"
+  | "PHONE"
+  | "PATIENT_NAME"
+  | "PATIENT_FIRST_NAME"
+  | "PATIENT_LAST_NAME"
+  | "PATIENT_ID"
+  | "PASSWORD";
 
 export interface SensitiveDetection {
   kind: DetectionKind;

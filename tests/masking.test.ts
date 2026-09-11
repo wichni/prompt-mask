@@ -21,6 +21,59 @@ describe("masking helpers", () => {
     expect(preview).not.toContain("anna.test");
   });
 
+  it("creates redacted patient-data previews", () => {
+    expect(
+      createMaskedPreview({
+        kind: "PATIENT_NAME",
+        start: 0,
+        end: 12,
+        value: "Żaneta Próba",
+      }),
+    ).toBe("•••");
+    expect(
+      createMaskedPreview({
+        kind: "PATIENT_FIRST_NAME",
+        start: 0,
+        end: 3,
+        value: "Iga",
+      }),
+    ).toBe("•••");
+    expect(
+      createMaskedPreview({
+        kind: "PATIENT_LAST_NAME",
+        start: 0,
+        end: 8,
+        value: "Modelowa",
+      }),
+    ).toBe("•••");
+    expect(
+      createMaskedPreview({
+        kind: "PASSWORD",
+        start: 0,
+        end: 13,
+        value: "P@ss-demo-7!Q",
+      }),
+    ).toBe("•••");
+    expect(
+      createMaskedPreview({
+        kind: "PATIENT_ID",
+        start: 0,
+        end: 9,
+        value: "PT-Z19-44",
+      }),
+    ).toBe("•••");
+  });
+
+  it("masks structured patient data without changing JSON field names", () => {
+    const text =
+      '{"patientFirstName":"Iga","patientLastName":"Modelowa","patientId":"PT-Z19-44","password":"Tmp!Pass-44"}';
+    const expected =
+      '{"patientFirstName":"[PATIENT_FIRST_NAME_1]","patientLastName":"[PATIENT_LAST_NAME_1]","patientId":"[PATIENT_ID_1]","password":"[PASSWORD_1]"}';
+
+    expect(createMaskingPlan(text, detectSensitiveData(text))?.text).toBe(expected);
+    expect(() => JSON.parse(expected)).not.toThrow();
+  });
+
   it("increments placeholders already present in the draft", () => {
     expect(createPlaceholder("PHONE", "Kontakt [PHONE_1] i [PHONE_3]")).toBe(
       "[PHONE_4]",
@@ -122,6 +175,12 @@ describe("masking helpers", () => {
     });
     expect(
       createManualMaskingPlan("x [EMAIL_1] y", { start: 4, end: 10 }),
+    ).toEqual({ status: "PLACEHOLDER_OVERLAP" });
+    expect(
+      createManualMaskingPlan("x [PATIENT_NAME_1] y", { start: 5, end: 15 }),
+    ).toEqual({ status: "PLACEHOLDER_OVERLAP" });
+    expect(
+      createManualMaskingPlan("x [PASSWORD_1] y", { start: 5, end: 11 }),
     ).toEqual({ status: "PLACEHOLDER_OVERLAP" });
     expect(createManualMaskingPlan("x [JSON] y", { start: 2, end: 8 })).toMatchObject({
       status: "READY",
