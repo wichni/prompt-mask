@@ -104,6 +104,20 @@ treści. Aktualna funkcja pomaga użytkownikowi zauważyć i zmienić dane przed
   sprzątanie mimo błędu ponownej analizy i odzyskanie działania bez
   przeładowania rozszerzenia.
 
+## CI
+
+- Workflow `CI` z jobem `Verify` jest przygotowany w stanie roboczym na bazie
+  `5827ed29e3a9f9cbcd16710a849d0f02707d83c8`. Obejmuje pull requesty do `main`,
+  push do `main` i uruchomienie ręczne; używa Node.js z `.nvmrc`, `npm ci` oraz
+  obowiązkowych kontroli typecheck, testów i builda.
+- Workflow nie został jeszcze potwierdzony rzeczywistym uruchomieniem GitHub
+  Actions. Nie ma więc linku do runa ani dowodu, że check jest wymagany przez
+  reguły ochrony gałęzi. Zmiany administracyjne repozytorium pozostają poza tym
+  etapem.
+- Lokalny odpowiednik joba zaliczono na Node.js `24.21.0` i npm `11.19.0`:
+  czyste `npm ci`, `npm run typecheck`, `npm test` (121/121) oraz
+  `npm run build` zakończyły się kodem 0.
+
 ## Dowody interfejsu
 
 Użytkownik potwierdził na Chrome, że poprzednia chroniona ramka działała, ale nie
@@ -148,7 +162,8 @@ instalacji i granicy danych pozostają odpowiednio w `README.md` i `SECURITY.md`
 Kontrola lokalnych odsyłaczy w siedmiu plikach dokumentacji nie wykazała
 uszkodzonych celów.
 
-## Następny kandydat na etap
+## Bieżący etap infrastruktury
 
-Automatyczne kontrole repozytorium uruchamiające typecheck, testy i build. To
-propozycja z kolejki, nie zatwierdzony zakres.
+Automatyczne kontrole repozytorium są przygotowane lokalnie, ale etap pozostaje
+nieodebrany do czasu pierwszego udanego przebiegu workflow dla wskazanej
+rewizji. Następnego etapu produktu nie rozpoczęto.

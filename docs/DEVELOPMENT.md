@@ -44,7 +44,8 @@ magazynem szkiców, danych pacjentów ani sekretów.
 ## Polecenia
 
 ```bash
-npm install
+nvm use
+npm ci
 npm run dev
 npm run typecheck
 npm test
@@ -52,9 +53,37 @@ npm run build
 git diff --check
 ```
 
+Plik [`.nvmrc`](../.nvmrc) wskazuje rodzinę Node.js używaną lokalnie i w CI.
+`npm ci` odtwarza zależności dokładnie z `package-lock.json`; zwykłe
+`npm install` służy wyłącznie do świadomej zmiany zależności i lockfile.
+
 `npm run build` tworzy `dist`, buduje panel oraz samodzielne skrypty rozszerzenia
 i sprawdza odwołania manifestu. `dist` jest artefaktem lokalnym i nie jest
 śledzony przez Git.
+
+## Continuous Integration
+
+Workflow [`CI`](../.github/workflows/ci.yml) uruchamia job `Verify` dla pull
+requestów kierowanych do `main`, pushy do `main` oraz na żądanie. Na świeżym
+runnerze `ubuntu-latest` odczytuje wersję Node.js z `.nvmrc`, instaluje
+zależności przez `npm ci`, a następnie obowiązkowo wykonuje typecheck, testy i
+produkcyjny build. Nowszy przebieg dla tego samego workflow i ref anuluje
+starszy.
+
+Lokalnym odpowiednikiem joba są kolejno:
+
+```bash
+nvm use
+npm ci
+npm run typecheck
+npm test
+npm run build
+```
+
+Wynik znajduje się w zakładce **Actions** repozytorium GitHub, w workflow
+**CI** i checku **Verify**. Samo istnienie workflow nie potwierdza jego działania
+ani nie włącza reguły wymagającej zaliczenia checka przed scaleniem; pierwszy
+udany przebieg i ustawienia ochrony gałęzi trzeba odnotować oddzielnie.
 
 ## Reguły implementacji
 

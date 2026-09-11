@@ -54,16 +54,20 @@ lub jej dostawca wcześniej nie otrzymali treści.
 
 ## Wymagania i build
 
-- Node.js 22.12+
-- npm 10+
+- Node.js z rodziny wskazanej w [`.nvmrc`](.nvmrc)
+- npm dostarczony z tą wersją Node.js
 - Chrome 114+ albo aktualny Microsoft Edge
 
 ```bash
-npm install
+nvm use
+npm ci
 npm run typecheck
 npm test
 npm run build
 ```
+
+Te same trzy kontrole uruchamia workflow GitHub Actions. Opis CI i jego lokalny
+odpowiednik znajdują się w [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md#continuous-integration).
 
 ## Instalacja lokalna
 
