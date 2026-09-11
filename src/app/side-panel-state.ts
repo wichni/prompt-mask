@@ -1,6 +1,7 @@
 import type {
   AnalysisSnapshot,
   DetectionSummary,
+  ManualMaskResult,
   MaskResult,
   PanelEvent,
   UndoResult,
@@ -31,7 +32,10 @@ export interface PanelState {
   hostMessage: string;
   snapshot: AnalysisSnapshot | null;
   pendingMask: PendingMask | null;
+  pendingManualMask: number | null;
   pendingUndo: number | null;
+  selectionId: number | null;
+  selectionMessage: string;
   undoOperationId: number | null;
   feedback: PanelFeedback | null;
 }
@@ -41,7 +45,11 @@ export const INITIAL_PANEL_STATE: PanelState = {
   hostMessage: "",
   snapshot: null,
   pendingMask: null,
+  pendingManualMask: null,
   pendingUndo: null,
+  selectionId: null,
+  selectionMessage:
+    "Zaznacz fragment w polu wiadomości, aby zamaskować go ręcznie.",
   undoOperationId: null,
   feedback: null,
 };
@@ -104,7 +112,10 @@ export const reducePanelEvent = (
       hostMessage: error,
       snapshot: null,
       pendingMask: null,
+      pendingManualMask: null,
       pendingUndo: null,
+      selectionId: null,
+      selectionMessage: INITIAL_PANEL_STATE.selectionMessage,
       undoOperationId: null,
       feedback: null,
     };
@@ -113,17 +124,39 @@ export const reducePanelEvent = (
     if (event.state === "SEARCHING") return INITIAL_PANEL_STATE;
     return { ...state, host: "READY", hostMessage: "" };
   }
+  if (event.type === "SELECTION_STATE") {
+    if (event.state === "READY") {
+      return {
+        ...state,
+        selectionId: event.selectionId,
+        selectionMessage: "Zaznaczenie gotowe do maskowania.",
+      };
+    }
+    return {
+      ...state,
+      selectionId: null,
+      selectionMessage:
+        event.state === "INVALID"
+          ? "Zaznaczenie obejmuje istniejące oznaczenie. Wybierz inny fragment."
+          : INITIAL_PANEL_STATE.selectionMessage,
+    };
+  }
   if (event.type === "ANALYSIS_SNAPSHOT") {
     const draftChanged =
       state.snapshot !== null && state.snapshot.revision !== event.revision;
     const undoExpired =
       draftChanged &&
       !state.pendingMask &&
+      state.pendingManualMask === null &&
       state.pendingUndo === null &&
       state.undoOperationId !== null;
     return {
       ...state,
       snapshot: event,
+      selectionId: draftChanged ? null : state.selectionId,
+      selectionMessage: draftChanged
+        ? INITIAL_PANEL_STATE.selectionMessage
+        : state.selectionMessage,
       undoOperationId: undoExpired ? null : state.undoOperationId,
       feedback: undoExpired
         ? {
@@ -133,6 +166,7 @@ export const reducePanelEvent = (
           }
         : draftChanged &&
             !state.pendingMask &&
+            state.pendingManualMask === null &&
             state.pendingUndo === null &&
             state.feedback?.code !== "UNDO_INVALIDATED"
           ? null
@@ -167,6 +201,25 @@ export const reducePanelEvent = (
     };
   }
   if (event.type === "UNDO_RESULT") return reduceUndoResult(state, event);
+  if (event.type === "MANUAL_MASK_STARTED") {
+    if (
+      state.selectionId !== event.selectionId ||
+      state.pendingMask ||
+      state.pendingManualMask !== null ||
+      state.pendingUndo !== null
+    ) {
+      return state;
+    }
+    return {
+      ...state,
+      pendingManualMask: event.selectionId,
+      feedback: null,
+    };
+  }
+  if (event.type === "MANUAL_MASK_RESULT") {
+    return reduceManualMaskResult(state, event);
+  }
+  if (event.type !== "MASK_RESULT") return state;
   if (!matchesPending(state.pendingMask, event)) return state;
   if (event.status === "ERROR") {
     return event.error === "STALE_TEXT"
@@ -195,6 +248,54 @@ export const reducePanelEvent = (
         pending.mode === "ALL"
           ? `Zamaskowane fragmenty: ${pending.count}.`
           : `Zamaskowano ${maskedDataLabels[pending.kind]}.`,
+    },
+  };
+};
+
+const reduceManualMaskResult = (
+  state: PanelState,
+  event: ManualMaskResult,
+): PanelState => {
+  if (state.pendingManualMask !== event.selectionId) return state;
+  if (event.status === "ERROR") {
+    return {
+      ...state,
+      pendingManualMask: null,
+      selectionId: null,
+      selectionMessage: INITIAL_PANEL_STATE.selectionMessage,
+      feedback: {
+        tone: event.error === "STALE_SELECTION" ? "INFO" : "ERROR",
+        message:
+          event.error === "STALE_SELECTION"
+            ? "Zaznacz fragment ponownie — tekst się zmienił."
+            : "Nie udało się zamaskować zaznaczenia. Sprawdź tekst.",
+      },
+    };
+  }
+  if (
+    state.snapshot?.revision !== event.resultRevision ||
+    state.snapshot.detections.length !== event.remainingDetections
+  ) {
+    return {
+      ...state,
+      pendingManualMask: null,
+      selectionId: null,
+      selectionMessage: INITIAL_PANEL_STATE.selectionMessage,
+      feedback: {
+        tone: "ERROR",
+        message: "Nie udało się zamaskować zaznaczenia. Sprawdź tekst.",
+      },
+    };
+  }
+  return {
+    ...state,
+    pendingManualMask: null,
+    selectionId: null,
+    selectionMessage: INITIAL_PANEL_STATE.selectionMessage,
+    undoOperationId: event.undoOperationId,
+    feedback: {
+      tone: "SUCCESS",
+      message: "Zamaskowano zaznaczony fragment.",
     },
   };
 };
@@ -233,7 +334,12 @@ export const beginSingleMask = (
   state: PanelState,
   detection: DetectionSummary,
 ): PanelState => {
-  if (!state.snapshot || state.pendingMask || state.pendingUndo !== null) {
+  if (
+    !state.snapshot ||
+    state.pendingMask ||
+    state.pendingManualMask !== null ||
+    state.pendingUndo !== null
+  ) {
     return state;
   }
   return {
@@ -252,6 +358,7 @@ export const beginBulkMask = (state: PanelState): PanelState => {
   if (
     !state.snapshot ||
     state.pendingMask ||
+    state.pendingManualMask !== null ||
     state.pendingUndo !== null ||
     state.snapshot.detections.length === 0
   ) {
@@ -272,10 +379,42 @@ export const beginBulkMask = (state: PanelState): PanelState => {
 export const failMaskDelivery = (state: PanelState): PanelState =>
   state.pendingMask ? operationFailure(state) : state;
 
+export const beginManualMask = (state: PanelState): PanelState => {
+  if (
+    !state.snapshot ||
+    state.selectionId === null ||
+    state.pendingMask ||
+    state.pendingManualMask !== null ||
+    state.pendingUndo !== null
+  ) {
+    return state;
+  }
+  return {
+    ...state,
+    pendingManualMask: state.selectionId,
+    feedback: null,
+  };
+};
+
+export const failManualMaskDelivery = (state: PanelState): PanelState =>
+  state.pendingManualMask === null
+    ? state
+    : {
+        ...state,
+        pendingManualMask: null,
+        selectionId: null,
+        selectionMessage: INITIAL_PANEL_STATE.selectionMessage,
+        feedback: {
+          tone: "ERROR",
+          message: "Nie udało się zamaskować zaznaczenia. Sprawdź tekst.",
+        },
+      };
+
 export const beginUndo = (state: PanelState): PanelState => {
   if (
     state.undoOperationId === null ||
     state.pendingMask ||
+    state.pendingManualMask !== null ||
     state.pendingUndo !== null
   ) {
     return state;

@@ -6,41 +6,19 @@ import {
 } from "./native-composer-client";
 import {
   beginBulkMask,
+  beginManualMask,
   beginSingleMask,
   beginUndo,
-  detectionLabels,
   failMaskDelivery,
+  failManualMaskDelivery,
   failUndoDelivery,
   INITIAL_PANEL_STATE,
   reducePanelEvent,
 } from "./side-panel-state";
 import { OperationStatus } from "./OperationStatus";
-
-const DetectionRow = ({
-  detection,
-  disabled,
-  onMask,
-}: {
-  detection: DetectionSummary;
-  disabled: boolean;
-  onMask: (detection: DetectionSummary) => void;
-}) => (
-  <article className="detection-item">
-    <div className="detection-details">
-      <strong>{detectionLabels[detection.kind]}</strong>
-      <code>{detection.maskedPreview}</code>
-    </div>
-    <button
-      aria-label={`Maskuj: ${detectionLabels[detection.kind]}`}
-      className="single-mask"
-      disabled={disabled}
-      onClick={() => onMask(detection)}
-      type="button"
-    >
-      Maskuj
-    </button>
-  </article>
-);
+import { ManualMaskAction } from "./ManualMaskAction";
+import { DetectionRow } from "./DetectionRow";
+import { ConnectionCard } from "./ConnectionCard";
 
 export const SidePanel = () => {
   const [state, setState] = useState(INITIAL_PANEL_STATE);
@@ -49,8 +27,11 @@ export const SidePanel = () => {
 
   useEffect(() => {
     const session = watchNativeComposer((event) => {
-      if (
+      if (event.type === "MANUAL_MASK_STARTED") {
+        operationInFlightRef.current = true;
+      } else if (
         event.type === "MASK_RESULT" ||
+        event.type === "MANUAL_MASK_RESULT" ||
         event.type === "UNDO_RESULT" ||
         event.type === "UNDO_INVALIDATED" ||
         (event.type === "HOST_STATUS" && event.state !== "READY")
@@ -100,6 +81,7 @@ export const SidePanel = () => {
     if (
       operationId === null ||
       state.pendingMask ||
+      state.pendingManualMask !== null ||
       state.pendingUndo !== null ||
       operationInFlightRef.current
     ) {
@@ -116,10 +98,38 @@ export const SidePanel = () => {
     }
   };
 
+  const sendManualMaskCommand = (): void => {
+    const selectionId = state.selectionId;
+    if (
+      selectionId === null ||
+      !state.snapshot ||
+      state.pendingMask ||
+      state.pendingManualMask !== null ||
+      state.pendingUndo !== null ||
+      operationInFlightRef.current
+    ) {
+      return;
+    }
+    operationInFlightRef.current = true;
+    setState(beginManualMask);
+    const delivered =
+      sessionRef.current?.maskSelection({
+        type: "MASK_SELECTION",
+        selectionId,
+      }) ?? false;
+    if (!delivered) {
+      operationInFlightRef.current = false;
+      setState(failManualMaskDelivery);
+    }
+  };
+
   const detections = state.snapshot?.detections ?? [];
   const isReady = state.host === "READY";
   const analysisComplete = isReady && state.snapshot !== null;
-  const operationPending = state.pendingMask !== null || state.pendingUndo !== null;
+  const operationPending =
+    state.pendingMask !== null ||
+    state.pendingManualMask !== null ||
+    state.pendingUndo !== null;
   const actionsDisabled = !analysisComplete || operationPending;
 
   return (
@@ -130,20 +140,7 @@ export const SidePanel = () => {
         <p>Pisz normalnie w ChatGPT. Tutaj wybierasz, co zamaskować.</p>
       </header>
 
-      <section className="connection-card" aria-live="polite">
-        <span className={`connection-dot ${isReady ? "online" : ""}`} />
-        <div>
-          <strong>
-            {state.host === "CONNECTING" && "Łączenie z edytorem…"}
-            {state.host === "ERROR" && "Analiza niedostępna"}
-            {isReady && "Analiza aktywna"}
-          </strong>
-          <p>
-            {state.host === "ERROR" && state.hostMessage}
-            {isReady && "Tekst jest sprawdzany lokalnie podczas pisania."}
-          </p>
-        </div>
-      </section>
+      <ConnectionCard host={state.host} message={state.hostMessage} />
 
       <p className="analysis-summary" aria-live="polite">
         <strong>
@@ -158,14 +155,21 @@ export const SidePanel = () => {
         undoDisabled={operationPending}
       />
 
-      <button
-        className="bulk-mask"
-        disabled={actionsDisabled || detections.length === 0}
-        onClick={() => sendMaskCommand(null)}
-        type="button"
-      >
-        Maskuj wszystkie wykryte ({detections.length})
-      </button>
+      <section className="mask-actions" aria-label="Akcje maskowania">
+        <ManualMaskAction
+          disabled={actionsDisabled || state.selectionId === null}
+          instruction={state.selectionMessage}
+          onMask={sendManualMaskCommand}
+        />
+        <button
+          className="bulk-mask"
+          disabled={actionsDisabled || detections.length === 0}
+          onClick={() => sendMaskCommand(null)}
+          type="button"
+        >
+          Maskuj wszystkie wykryte ({detections.length})
+        </button>
+      </section>
 
       <section className="detections-card" aria-live="polite">
         <h2>Propozycje maskowania</h2>

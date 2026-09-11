@@ -25,7 +25,7 @@ export const OperationStatus = ({
   >
     <span aria-hidden="true" className="status-placeholder">
       <b className="feedback-icon">!</b>
-      <span>Nie udało się cofnąć maskowania. Sprawdź tekst.</span>
+      <span>Nie udało się zamaskować zaznaczenia. Sprawdź tekst.</span>
       <span className="undo-placeholder">Cofnij</span>
     </span>
     {feedback && (

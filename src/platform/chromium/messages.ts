@@ -1,7 +1,7 @@
 import type { DetectionKind } from "../../core/detection";
 
 export const MAX_TEXT_LENGTH = 12_000;
-export const PANEL_CONTENT_PORT = "PROMPT_MASK_PANEL_CONTENT_V5";
+export const PANEL_CONTENT_PORT = "PROMPT_MASK_PANEL_CONTENT_V7";
 
 export interface DetectionSummary {
   id: string;
@@ -27,6 +27,15 @@ export interface AnalysisSnapshot {
   length: number;
   detections: DetectionSummary[];
 }
+
+export type SelectionState =
+  | { type: "SELECTION_STATE"; state: "NONE" }
+  | { type: "SELECTION_STATE"; state: "READY"; selectionId: number }
+  | {
+      type: "SELECTION_STATE";
+      state: "INVALID";
+      reason: "PLACEHOLDER_OVERLAP";
+    };
 
 export type MaskResult =
   | {
@@ -60,6 +69,27 @@ export type UndoResult =
       error: "UNDO_FAILED";
     };
 
+export type ManualMaskResult =
+  | {
+      type: "MANUAL_MASK_RESULT";
+      status: "SUCCESS";
+      selectionId: number;
+      resultRevision: number;
+      remainingDetections: number;
+      undoOperationId: number;
+    }
+  | {
+      type: "MANUAL_MASK_RESULT";
+      status: "ERROR";
+      selectionId: number;
+      error: "MASK_FAILED" | "STALE_SELECTION";
+    };
+
+export interface ManualMaskStarted {
+  type: "MANUAL_MASK_STARTED";
+  selectionId: number;
+}
+
 export interface UndoInvalidated {
   type: "UNDO_INVALIDATED";
   operationId: number;
@@ -69,7 +99,10 @@ export interface UndoInvalidated {
 export type PanelEvent =
   | HostStatus
   | AnalysisSnapshot
+  | SelectionState
   | MaskResult
+  | ManualMaskStarted
+  | ManualMaskResult
   | UndoResult
   | UndoInvalidated;
 
@@ -84,7 +117,12 @@ export type UndoCommand = {
   operationId: number;
 };
 
-export type PanelCommand = MaskCommand | UndoCommand;
+export type ManualMaskCommand = {
+  type: "MASK_SELECTION";
+  selectionId: number;
+};
+
+export type PanelCommand = MaskCommand | ManualMaskCommand | UndoCommand;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -137,6 +175,20 @@ export const isSupportedChatGptUrl = (value: string): boolean => {
 
 export const isPanelEvent = (value: unknown): value is PanelEvent => {
   if (!isRecord(value)) return false;
+  if (value.type === "SELECTION_STATE") {
+    if (value.state === "NONE") return hasExactKeys(value, ["type", "state"]);
+    if (value.state === "READY") {
+      return (
+        hasExactKeys(value, ["type", "state", "selectionId"]) &&
+        isSafeCounter(value.selectionId)
+      );
+    }
+    return (
+      value.state === "INVALID" &&
+      hasExactKeys(value, ["type", "state", "reason"]) &&
+      value.reason === "PLACEHOLDER_OVERLAP"
+    );
+  }
   if (value.type === "ANALYSIS_SNAPSHOT") {
     return (
       hasExactKeys(value, ["type", "revision", "length", "detections"]) &&
@@ -180,6 +232,36 @@ export const isPanelEvent = (value: unknown): value is PanelEvent => {
       isSafeCounter(value.remainingDetections) &&
       Number(value.remainingDetections) <= MAX_TEXT_LENGTH &&
       isSafeCounter(value.undoOperationId)
+    );
+  }
+  if (value.type === "MANUAL_MASK_RESULT") {
+    if (!isSafeCounter(value.selectionId)) return false;
+    if (value.status === "ERROR") {
+      return (
+        hasExactKeys(value, ["type", "status", "selectionId", "error"]) &&
+        (value.error === "MASK_FAILED" || value.error === "STALE_SELECTION")
+      );
+    }
+    return (
+      value.status === "SUCCESS" &&
+      hasExactKeys(value, [
+        "type",
+        "status",
+        "selectionId",
+        "resultRevision",
+        "remainingDetections",
+        "undoOperationId",
+      ]) &&
+      isSafeCounter(value.resultRevision) &&
+      isSafeCounter(value.remainingDetections) &&
+      Number(value.remainingDetections) <= MAX_TEXT_LENGTH &&
+      isSafeCounter(value.undoOperationId)
+    );
+  }
+  if (value.type === "MANUAL_MASK_STARTED") {
+    return (
+      hasExactKeys(value, ["type", "selectionId"]) &&
+      isSafeCounter(value.selectionId)
     );
   }
   if (value.type === "UNDO_RESULT") {
@@ -228,6 +310,9 @@ export const isPanelCommand = (value: unknown): value is PanelCommand =>
     value.type === "MASK_DETECTIONS" &&
     isSafeCounter(value.revision) &&
     isDetectionIds(value.detectionIds)) ||
+    (hasExactKeys(value, ["type", "selectionId"]) &&
+      value.type === "MASK_SELECTION" &&
+      isSafeCounter(value.selectionId)) ||
     (hasExactKeys(value, ["type", "operationId"]) &&
       value.type === "UNDO_MASK" &&
       isSafeCounter(value.operationId)));

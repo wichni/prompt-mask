@@ -2,8 +2,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   PANEL_CONTENT_PORT,
   type AnalysisSnapshot,
+  type ManualMaskResult,
   type MaskResult,
   type PanelEvent,
+  type SelectionState,
   type UndoResult,
 } from "../src/platform/chromium/messages";
 
@@ -59,6 +61,32 @@ const maskResults = (port: ReturnType<typeof createPort>): MaskResult[] =>
         message.type === "MASK_RESULT",
     );
 
+const manualMaskResults = (
+  port: ReturnType<typeof createPort>,
+): ManualMaskResult[] =>
+  events(port).filter(
+    (message): message is ManualMaskResult =>
+      message.type === "MANUAL_MASK_RESULT",
+  );
+
+const selectionStates = (
+  port: ReturnType<typeof createPort>,
+): SelectionState[] =>
+  events(port).filter(
+    (message): message is SelectionState => message.type === "SELECTION_STATE",
+  );
+
+const selectTextareaRange = (
+  textarea: HTMLTextAreaElement,
+  start: number,
+  end: number,
+  direction: "forward" | "backward" = "forward",
+): void => {
+  textarea.focus();
+  textarea.setSelectionRange(start, end, direction);
+  textarea.dispatchEvent(new Event("select", { bubbles: true }));
+};
+
 const events = (port: ReturnType<typeof createPort>): PanelEvent[] =>
   port.postMessage.mock.calls.map(([message]) => message as PanelEvent);
 
@@ -69,6 +97,9 @@ const undoResults = (port: ReturnType<typeof createPort>): UndoResult[] =>
 
 beforeEach(async () => {
   vi.resetModules();
+  document
+    .querySelectorAll("#prompt-mask-manual-shortcut")
+    .forEach((element) => element.remove());
   document.body.innerHTML = '<textarea id="mobile-composer-prompt"></textarea>';
   vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
     callback(0);
@@ -334,6 +365,235 @@ describe("native composer analysis", () => {
       requestRevision: snapshot.revision + 1,
       detectionIds: [snapshot.detections[0]!.id],
       error: "STALE_TEXT",
+    });
+  });
+
+  it("masks only the selected repeated fragment and undoes the manual operation", () => {
+    const textarea = document.querySelector<HTMLTextAreaElement>("textarea")!;
+    const original =
+      "Jan Testowy zgłosił błąd. Jan Testowy czeka 🙂\nna odpowiedź.";
+    textarea.value = original;
+    const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
+    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    textarea.focus();
+    textarea.setSelectionRange(0, "Jan Testowy".length);
+    textarea.dispatchEvent(new PointerEvent("pointerup", { bubbles: true }));
+    const firstSelection = selectionStates(panel).at(-1);
+    const start = original.lastIndexOf("Jan Testowy");
+    textarea.setSelectionRange(start, start + "Jan Testowy".length, "backward");
+    textarea.dispatchEvent(
+      new KeyboardEvent("keyup", { bubbles: true, key: "ArrowLeft", shiftKey: true }),
+    );
+    const selection = selectionStates(panel).at(-1);
+
+    expect(selection).toMatchObject({
+      type: "SELECTION_STATE",
+      state: "READY",
+    });
+    expect(firstSelection).toMatchObject({ state: "READY" });
+    if (firstSelection?.state !== "READY") throw new Error("Expected selection");
+    expect(selection).not.toEqual(firstSelection);
+    const shortcut = document.querySelector<HTMLDivElement>(
+      "#prompt-mask-manual-shortcut",
+    )!;
+    expect(shortcut.style.display).toBe("block");
+    const selectionEventCount = selectionStates(panel).length;
+    shortcut.dispatchEvent(
+      new PointerEvent("pointerup", { bubbles: true, composed: true }),
+    );
+    expect(selectionStates(panel)).toHaveLength(selectionEventCount);
+    expect(JSON.stringify(panel.postMessage.mock.calls)).not.toContain(
+      "Jan Testowy",
+    );
+    if (selection?.state !== "READY") throw new Error("Expected selection");
+    panel.fireMessage({
+      type: "MASK_SELECTION",
+      selectionId: selection.selectionId,
+    });
+
+    expect(textarea.value).toBe(
+      "Jan Testowy zgłosił błąd. [DANE_1] czeka 🙂\nna odpowiedź.",
+    );
+    expect(shortcut.style.display).toBe("none");
+    expect(manualMaskResults(panel).at(-1)).toMatchObject({
+      status: "SUCCESS",
+      selectionId: selection.selectionId,
+      remainingDetections: 0,
+    });
+    const result = manualMaskResults(panel).at(-1)!;
+    if (result.status !== "SUCCESS") throw new Error("Expected manual success");
+    panel.fireMessage({
+      type: "MASK_SELECTION",
+      selectionId: selection.selectionId,
+    });
+    expect(textarea.value).toBe(
+      "Jan Testowy zgłosił błąd. [DANE_1] czeka 🙂\nna odpowiedź.",
+    );
+    expect(manualMaskResults(panel).map(({ status }) => status)).toEqual([
+      "SUCCESS",
+      "ERROR",
+    ]);
+    panel.fireMessage({ type: "UNDO_MASK", operationId: result.undoOperationId });
+
+    expect(textarea.value).toBe(original);
+    expect(selectionStates(panel).at(-1)).toEqual({
+      type: "SELECTION_STATE",
+      state: "NONE",
+    });
+    expect(undoResults(panel).at(-1)).toMatchObject({ status: "SUCCESS" });
+  });
+
+  it("does not revive a selection after editing back to identical text", () => {
+    const textarea = document.querySelector<HTMLTextAreaElement>("textarea")!;
+    const original = "Klient Testowy czeka";
+    textarea.value = original;
+    const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
+    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    selectTextareaRange(textarea, 0, "Klient Testowy".length);
+    const selection = selectionStates(panel).at(-1);
+    if (selection?.state !== "READY") throw new Error("Expected selection");
+
+    textarea.value = `${original}.`;
+    textarea.dispatchEvent(new InputEvent("input", { bubbles: true }));
+    textarea.value = original;
+    textarea.dispatchEvent(new InputEvent("input", { bubbles: true }));
+    panel.fireMessage({
+      type: "MASK_SELECTION",
+      selectionId: selection.selectionId,
+    });
+
+    expect(textarea.value).toBe(original);
+    expect(manualMaskResults(panel).at(-1)).toEqual({
+      type: "MANUAL_MASK_RESULT",
+      status: "ERROR",
+      selectionId: selection.selectionId,
+      error: "STALE_SELECTION",
+    });
+  });
+
+  it("rejects whitespace and generated placeholders without blocking JSON brackets", () => {
+    const textarea = document.querySelector<HTMLTextAreaElement>("textarea")!;
+    textarea.value = "  [EMAIL_1] [JSON]";
+    const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
+    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+
+    selectTextareaRange(textarea, 0, 2);
+    expect(selectionStates(panel)).toHaveLength(0);
+    selectTextareaRange(textarea, 3, 10);
+    expect(selectionStates(panel).at(-1)).toEqual({
+      type: "SELECTION_STATE",
+      state: "INVALID",
+      reason: "PLACEHOLDER_OVERLAP",
+    });
+    const jsonStart = textarea.value.indexOf("[JSON]");
+    selectTextareaRange(textarea, jsonStart, jsonStart + "[JSON]".length);
+    expect(selectionStates(panel).at(-1)).toMatchObject({ state: "READY" });
+
+    const history = document.createElement("p");
+    history.textContent = "Treść historii";
+    document.body.append(history);
+    history.dispatchEvent(new PointerEvent("pointerup", { bubbles: true }));
+    expect(selectionStates(panel).at(-1)).toEqual({
+      type: "SELECTION_STATE",
+      state: "NONE",
+    });
+
+    selectTextareaRange(textarea, jsonStart, jsonStart + "[JSON]".length);
+    textarea.setSelectionRange(jsonStart, jsonStart);
+    textarea.dispatchEvent(new PointerEvent("pointerup", { bubbles: true }));
+    expect(selectionStates(panel).at(-1)).toEqual({
+      type: "SELECTION_STATE",
+      state: "NONE",
+    });
+  });
+
+  it("preserves a concurrent user edit when a manual write cannot be confirmed", () => {
+    const textarea = document.querySelector<HTMLTextAreaElement>("textarea")!;
+    textarea.value = "Klient Testowy czeka";
+    const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
+    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    selectTextareaRange(textarea, 0, "Klient Testowy".length);
+    const selection = selectionStates(panel).at(-1);
+    if (selection?.state !== "READY") throw new Error("Expected selection");
+    textarea.addEventListener(
+      "input",
+      () => {
+        textarea.value = "Nowsza edycja użytkownika";
+      },
+      { once: true },
+    );
+
+    panel.fireMessage({
+      type: "MASK_SELECTION",
+      selectionId: selection.selectionId,
+    });
+
+    expect(textarea.value).toBe("Nowsza edycja użytkownika");
+    expect(manualMaskResults(panel).at(-1)).toEqual({
+      type: "MANUAL_MASK_RESULT",
+      status: "ERROR",
+      selectionId: selection.selectionId,
+      error: "MASK_FAILED",
+    });
+  });
+
+  it("does not write when a manual placeholder would exceed the text limit", () => {
+    const textarea = document.querySelector<HTMLTextAreaElement>("textarea")!;
+    const original = "a".repeat(12_000);
+    textarea.value = original;
+    const inputListener = vi.fn();
+    textarea.addEventListener("input", inputListener);
+    const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
+    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    selectTextareaRange(textarea, 0, 1);
+    const selection = selectionStates(panel).at(-1);
+    if (selection?.state !== "READY") throw new Error("Expected selection");
+
+    panel.fireMessage({
+      type: "MASK_SELECTION",
+      selectionId: selection.selectionId,
+    });
+
+    expect(textarea.value).toBe(original);
+    expect(inputListener).not.toHaveBeenCalled();
+    expect(manualMaskResults(panel).at(-1)).toMatchObject({
+      status: "ERROR",
+      error: "MASK_FAILED",
+    });
+  });
+
+  it("invalidates a manual selection when another mask runs and limits repeats", () => {
+    const textarea = document.querySelector<HTMLTextAreaElement>("textarea")!;
+    textarea.value = "Klient Testowy anna.test@example.com";
+    const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
+    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    const snapshot = snapshots(panel).at(-1)!;
+    selectTextareaRange(textarea, 0, "Klient Testowy".length);
+    const selection = selectionStates(panel).at(-1);
+    if (selection?.state !== "READY") throw new Error("Expected selection");
+
+    panel.fireMessage({
+      type: "MASK_DETECTIONS",
+      revision: snapshot.revision,
+      detectionIds: [snapshot.detections[0]!.id],
+    });
+    panel.fireMessage({
+      type: "MASK_SELECTION",
+      selectionId: selection.selectionId,
+    });
+    panel.fireMessage({
+      type: "MASK_SELECTION",
+      selectionId: selection.selectionId,
+    });
+
+    expect(textarea.value).toBe("Klient Testowy [EMAIL_1]");
+    expect(manualMaskResults(panel).map(({ status }) => status)).toEqual([
+      "ERROR",
+      "ERROR",
+    ]);
+    expect(selectionStates(panel)).toContainEqual({
+      type: "SELECTION_STATE",
+      state: "NONE",
     });
   });
 

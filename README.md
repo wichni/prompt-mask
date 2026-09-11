@@ -2,7 +2,8 @@
 
 Rozszerzenie Chromium, które lokalnie analizuje tekst wpisywany w natywnym
 edytorze ChatGPT. Wykrycia pojawiają się w panelu bocznym, a użytkownik decyduje,
-czy zamaskować pojedynczy fragment albo wszystkie aktualne wykrycia.
+czy zamaskować pojedynczy fragment, wszystkie aktualne wykrycia albo własne
+zaznaczenie.
 
 ## Działa obecnie
 
@@ -17,12 +18,24 @@ czy zamaskować pojedynczy fragment albo wszystkie aktualne wykrycia.
    pozostawia propozycje widoczne.
 7. „Cofnij” przy ostatnim potwierdzeniu przywraca stan bieżącego pola ChatGPT
    sprzed pojedynczej podmiany albo całej podmiany zbiorczej.
+8. „Maskuj zaznaczenie” zastępuje dokładnie jeden aktualnie zaznaczony fragment
+   ogólnym oznaczeniem `[DANE_N]`, również gdy detektory niczego nie znalazły.
+9. Przy poprawnym zaznaczeniu nad prawą krawędzią edytora pojawia się mały skrót
+   `[•••]`, uruchamiający dokładnie tę samą ręczną operację.
+
+Aby zamaskować fragment ręcznie, zaznacz go myszą albo klawiaturą w polu
+wiadomości, a następnie kliknij `[•••]` przy edytorze albo „Maskuj zaznaczenie”
+w panelu. Obie kontrolki korzystają z tej samej operacji. Jedna operacja zmienia
+tylko jedno wskazane wystąpienie. Pusty wybór, same białe znaki oraz zakres
+nachodzący na oznaczenie utworzone przez promptMask są odrzucane.
 
 Cofanie ma jeden poziom i działa tylko tak długo, jak użytkownik nie zmienił
 szkicu, pola, rozmowy ani aktywnej karty i nie wysłał wiadomości. Nowe udane
-maskowanie zastępuje poprzednią możliwość cofnięcia. Po cofnięciu przywrócone
-dane ponownie pojawiają się jako propozycje, ale drugie cofnięcie nie jest
-dostępne.
+maskowanie — także ręczne — zastępuje poprzednią możliwość cofnięcia. Po
+cofnięciu przywrócone dane ponownie pojawiają się jako propozycje, ale drugie
+cofnięcie nie jest dostępne. Zapisane zaznaczenie wygasa po edycji, innym
+maskowaniu, cofnięciu, wysłaniu, zmianie szkicu, rozmowy, karty lub pola. Powrót
+do identycznego tekstu nie przywraca starego wyboru.
 
 Oryginał potrzebny do cofnięcia istnieje tymczasowo wyłącznie w pamięci content
 scriptu aktywnego szkicu. Nie jest przekazywany do panelu ani zapisywany w
@@ -89,7 +102,22 @@ Używaj wyłącznie danych utworzonych na potrzeby testu.
 11. Sprawdź szybkie podwójne kliknięcie, zmianę samego fokusu i kursora, stan bez
     wykryć, brak dostępu do pola, obsługę klawiaturą, wąski panel i brak
     automatycznego wysłania.
-12. Powtórz odbiór osobno w drugiej przeglądarce.
+12. Przy liczniku `Do sprawdzenia: 0` wpisz dwa razy `Jan Testowy`, zaznacz
+    drugie wystąpienie i kliknij „Maskuj zaznaczenie”. Tylko drugi fragment ma
+    zmienić się na `[DANE_1]`; następnie sprawdź „Cofnij”.
+13. Sprawdź ręczne zaznaczenie myszą i klawiaturą w obu kierunkach, także dla
+    kilku wierszy, polskich znaków i emoji. Tekst poza zakresem ma pozostać bez
+    zmian, a przejście fokusu do panelu nie może zgubić wyboru.
+14. Sprawdź wygasanie ręcznego wyboru po ustawieniu kursora, zaznaczeniu tekstu
+    poza polem, edycji z powrotem do identycznej treści, innym maskowaniu,
+    cofnięciu, wysłaniu, zmianie rozmowy, karty i pola.
+15. Zaznacz część `[DANE_1]` i sprawdź odmowę. Osobny tekst w nawiasach, np.
+    `[JSON]`, nie może zostać uznany za oznaczenie promptMask.
+16. Sprawdź, że `[•••]` pojawia się nad prawą krawędzią edytora tylko dla
+    poprawnego zaznaczenia, nie zasłania tekstu, działa myszą i klawiaturą oraz
+    znika po użyciu albo unieważnieniu wyboru. Panel powinien pokazać ten sam
+    sukces i „Cofnij”.
+17. Powtórz odbiór osobno w drugiej przeglądarce.
 
 Testy automatyczne używają atrapy DOM. Rzeczywisty odbiór trzeba wykonać osobno
 w Chrome i Edge.

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   findNativeComposer,
+  readComposerSelection,
   readComposerText,
   writeComposerText,
 } from "../src/providers/chatgpt/native-composer";
@@ -48,5 +49,42 @@ describe("native ChatGPT composer", () => {
     expect(textarea.value).toBe("Treść [PESEL_1]");
     expect(textarea.selectionStart).toBe(15);
     expect(listener).toHaveBeenCalledOnce();
+  });
+
+  it("reads normalized textarea selection in UTF-16 indices", () => {
+    const textarea = document.createElement("textarea");
+    textarea.value = "🙂 Jan Testowy";
+    textarea.setSelectionRange(3, 14, "backward");
+
+    expect(readComposerSelection(textarea)).toEqual({ start: 3, end: 14 });
+  });
+
+  it("maps a multi-node contenteditable range and rejects cross-field selection", () => {
+    const editable = document.createElement("div");
+    editable.contentEditable = "true";
+    editable.innerHTML = "Ala <strong>Testowa</strong> czeka";
+    const strongText = editable.querySelector("strong")!.firstChild!;
+    const lastText = editable.lastChild!;
+    document.body.append(editable);
+    const range = document.createRange();
+    range.setStart(strongText, 0);
+    range.setEnd(lastText, 3);
+    const selection = window.getSelection()!;
+    selection.removeAllRanges();
+    selection.addRange(range);
+
+    expect(readComposerSelection(editable, selection)).toEqual({
+      start: 4,
+      end: 14,
+    });
+
+    const outside = document.createTextNode("poza");
+    document.body.append(outside);
+    const crossField = document.createRange();
+    crossField.setStart(strongText, 0);
+    crossField.setEnd(outside, 2);
+    selection.removeAllRanges();
+    selection.addRange(crossField);
+    expect(readComposerSelection(editable, selection)).toBeNull();
   });
 });

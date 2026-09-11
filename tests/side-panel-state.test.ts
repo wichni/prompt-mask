@@ -6,6 +6,7 @@ import type {
 import {
   beginUndo,
   beginBulkMask,
+  beginManualMask,
   beginSingleMask,
   detectionLabels,
   INITIAL_PANEL_STATE,
@@ -88,6 +89,82 @@ describe("side panel state", () => {
     expect(confirmed.feedback).toEqual({
       tone: "SUCCESS",
       message: "Zamaskowane fragmenty: 2.",
+    });
+  });
+
+  it("tracks a payload-free selection and confirms manual masking after rescan", () => {
+    const selected = reducePanelEvent(readyState(), {
+      type: "SELECTION_STATE",
+      state: "READY",
+      selectionId: 4,
+    });
+    const pending = beginManualMask(selected);
+    const cleared = reducePanelEvent(pending, {
+      type: "SELECTION_STATE",
+      state: "NONE",
+    });
+    const rescanned = reducePanelEvent(cleared, snapshot(2, [phone]));
+    const confirmed = reducePanelEvent(rescanned, {
+      type: "MANUAL_MASK_RESULT",
+      status: "SUCCESS",
+      selectionId: 4,
+      resultRevision: 2,
+      remainingDetections: 1,
+      undoOperationId: 3,
+    });
+
+    expect(pending.pendingManualMask).toBe(4);
+    expect(confirmed.pendingManualMask).toBeNull();
+    expect(confirmed.undoOperationId).toBe(3);
+    expect(confirmed.feedback).toEqual({
+      tone: "SUCCESS",
+      message: "Zamaskowano zaznaczony fragment.",
+    });
+  });
+
+  it("tracks a manual operation started by the page shortcut", () => {
+    const selected = reducePanelEvent(readyState(), {
+      type: "SELECTION_STATE",
+      state: "READY",
+      selectionId: 8,
+    });
+    const pending = reducePanelEvent(selected, {
+      type: "MANUAL_MASK_STARTED",
+      selectionId: 8,
+    });
+    const foreign = reducePanelEvent(pending, {
+      type: "MANUAL_MASK_STARTED",
+      selectionId: 9,
+    });
+
+    expect(pending.pendingManualMask).toBe(8);
+    expect(foreign).toBe(pending);
+  });
+
+  it("shows distinct selection guidance for overlap and stale execution", () => {
+    const overlap = reducePanelEvent(readyState(), {
+      type: "SELECTION_STATE",
+      state: "INVALID",
+      reason: "PLACEHOLDER_OVERLAP",
+    });
+    expect(overlap.selectionMessage).toBe(
+      "Zaznaczenie obejmuje istniejące oznaczenie. Wybierz inny fragment.",
+    );
+
+    const selected = reducePanelEvent(readyState(), {
+      type: "SELECTION_STATE",
+      state: "READY",
+      selectionId: 5,
+    });
+    const failed = reducePanelEvent(beginManualMask(selected), {
+      type: "MANUAL_MASK_RESULT",
+      status: "ERROR",
+      selectionId: 5,
+      error: "STALE_SELECTION",
+    });
+    expect(failed.feedback).toEqual({
+      tone: "INFO",
+      message: "Zaznacz fragment ponownie — tekst się zmienił.",
     });
   });
 

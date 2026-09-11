@@ -21,15 +21,16 @@ otrzyma surowego tekstu”.
 | Kontekst | Surowy tekst | Pełne wykryte wartości | Rola |
 | --- | ---: | ---: | --- |
 | strona ChatGPT | tak | tak | właściciel natywnego DOM |
-| content script | tak, w pamięci | tak, w pamięci | analiza, podmiana i jeden tymczasowy rekord cofania |
+| content script | tak, w pamięci | tak, w pamięci | analiza, podmiana, tymczasowy rekord zaznaczenia i jeden rekord cofania |
 | panel rozszerzenia | nie | nie | typ, ukryty podgląd i decyzja |
 | service worker | nie | nie | otwieranie panelu |
 | storage | nie | nie | obecnie nieużywany |
 
 Content script nie loguje ani nie przekazuje surowego szkicu. Panel otrzymuje
-tylko długość, wersję, listę `{ id, kind, maskedPreview }` oraz identyfikator i
-status ostatniej operacji. Oryginał i oczekiwany wynik potrzebne do cofnięcia nie
-opuszczają content scriptu i nie trafiają do trwałego magazynu.
+tylko długość, wersję, listę `{ id, kind, maskedPreview }`, stan gotowości i
+liczbowy identyfikator zaznaczenia oraz identyfikator i status ostatniej
+operacji. Treść zaznaczenia, oryginał i oczekiwany wynik potrzebne do cofnięcia
+nie opuszczają content scriptu i nie trafiają do trwałego magazynu.
 
 ## Dozwolony przepływ
 
@@ -44,6 +45,18 @@ natywny edytor ChatGPT
   → opcjonalne ręczne wysłanie przez użytkownika
 ```
 
+Ręczna ścieżka zastępuje listę wykryć tymczasowym rekordem zakresu w content
+scripcie. Panel wysyła wyłącznie jego identyfikator. Wykonawca ponownie sprawdza
+element, dokument, URL, generacje kontekstu i zmian, rewizję, zakres oraz tekst,
+a następnie korzysta z tej samej ścieżki pojedynczego zapisu i cofania.
+
+Pomocnicza kontrolka `[•••]` jest statycznym elementem dodanym do DOM strony
+przez content script. Nie zawiera treści zaznaczenia ani identyfikatora w
+atrybutach DOM. Style i przycisk są w zamkniętym Shadow DOM, a obsługa odrzuca
+programowe zdarzenia bez `isTrusted`. Strona nadal może zauważyć host kontrolki,
+ukryć go, usunąć lub imitować jego wygląd, dlatego ikonka nie jest wskaźnikiem
+zaufania ani granicą bezpieczeństwa. Pełna kontrolka w panelu pozostaje dostępna.
+
 ## Reguły modyfikacji
 
 Podmiana nie zachodzi, gdy:
@@ -54,6 +67,8 @@ Podmiana nie zachodzi, gdy:
 - wersja decyzji nie odpowiada bieżącemu szkicowi,
 - zbiorcza decyzja nie odpowiada dokładnie aktualnej liście propozycji,
 - bieżący zakres nie zawiera wcześniej wykrytej wartości,
+- ręczne zaznaczenie wygasło, jest puste, zawiera tylko białe znaki, wychodzi
+  poza bieżące pole albo nachodzi na oznaczenie utworzone przez promptMask,
 - zakresy nakładają się albo nie można przygotować kompletnego planu podmian,
 - tekst przekracza limit 12 000 jednostek UTF-16,
 - wystąpił błąd odczytu albo zapisu DOM.
@@ -79,6 +94,11 @@ wysłać surowy tekst, dlatego UI nie może sugerować pełnej ochrony.
 | błędny selektor | priorytet selektorów i odmowa przy niejednoznaczności |
 | częściowa podmiana zbiorcza | walidacja całego planu przed jednym zapisem DOM |
 | globalna podmiana wartości | zakresy `[start, end)` i składanie tekstu bez globalnego `replace()` |
+| wyciek ręcznie wskazanej wartości | treść wyboru zostaje w content scripcie; panel dostaje tylko stan i liczbowy identyfikator |
+| użycie ukrytego starego wyboru | rekord pola, URL, rewizji i monotonicznych generacji; edycja i nowy wybór unieważniają poprzedni |
+| zagnieżdżenie oznaczeń | ręczny zakres nachodzący na `[PESEL_N]`, `[EMAIL_N]`, `[PHONE_N]` lub `[DANE_N]` jest odrzucany |
+| programowe uruchomienie ikonki przez stronę | zamknięty Shadow DOM i akceptowanie wyłącznie zaufanego zdarzenia użytkownika |
+| usunięcie lub imitacja ikonki przez stronę | ikonka nie jest kontrolką bezpieczeństwa; panel rozszerzenia pozostaje kanoniczną alternatywą |
 | wyciek przez logi | brak logowania payloadów i wykrytych wartości |
 | dodatkowy kanał sieciowy | brak API modeli, telemetryki i wywołań sieciowych rozszerzenia |
 | ReDoS lub blokada UI | limit wejścia i liniowe, ograniczone wzorce |

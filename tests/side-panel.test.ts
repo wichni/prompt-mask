@@ -6,6 +6,7 @@ import type { PanelEvent } from "../src/platform/chromium/messages";
 const composerMock = vi.hoisted(() => ({
   disconnect: vi.fn(),
   mask: vi.fn(() => true),
+  maskSelection: vi.fn(() => true),
   undo: vi.fn(() => true),
   onEvent: undefined as ((event: PanelEvent) => void) | undefined,
 }));
@@ -16,6 +17,7 @@ vi.mock("../src/app/native-composer-client", () => ({
     return {
       disconnect: composerMock.disconnect,
       mask: composerMock.mask,
+      maskSelection: composerMock.maskSelection,
       undo: composerMock.undo,
     };
   },
@@ -36,6 +38,8 @@ beforeEach(() => {
   composerMock.disconnect.mockClear();
   composerMock.mask.mockReset();
   composerMock.mask.mockReturnValue(true);
+  composerMock.maskSelection.mockReset();
+  composerMock.maskSelection.mockReturnValue(true);
   composerMock.undo.mockReset();
   composerMock.undo.mockReturnValue(true);
   composerMock.onEvent = undefined;
@@ -85,10 +89,104 @@ describe("side panel", () => {
     expect(container.querySelector<HTMLButtonElement>(".bulk-mask")?.disabled).toBe(
       false,
     );
-    expect(container.querySelectorAll("button")).toHaveLength(3);
+    expect(container.querySelectorAll("button")).toHaveLength(4);
     expect(
       [...container.querySelectorAll("button")].map((button) => button.textContent),
-    ).toEqual(["Maskuj wszystkie wykryte (2)", "Maskuj", "Maskuj"]);
+    ).toEqual([
+      "Maskuj zaznaczenie",
+      "Maskuj wszystkie wykryte (2)",
+      "Maskuj",
+      "Maskuj",
+    ]);
+  });
+
+  it("enables manual masking with zero detections and confirms only after rescan", () => {
+    emit({ type: "HOST_STATUS", state: "READY" });
+    emit({
+      type: "ANALYSIS_SNAPSHOT",
+      revision: 1,
+      length: 13,
+      detections: [],
+    });
+    const manual = container.querySelector<HTMLButtonElement>(".manual-mask")!;
+    expect(manual.disabled).toBe(true);
+    expect(container.textContent).toContain(
+      "Zaznacz fragment w polu wiadomości, aby zamaskować go ręcznie",
+    );
+
+    emit({ type: "SELECTION_STATE", state: "READY", selectionId: 6 });
+    expect(manual.disabled).toBe(false);
+    expect(container.textContent).toContain("Zaznaczenie gotowe do maskowania");
+    act(() => {
+      manual.click();
+      manual.click();
+    });
+    expect(composerMock.maskSelection).toHaveBeenCalledOnce();
+    expect(composerMock.maskSelection).toHaveBeenCalledWith({
+      type: "MASK_SELECTION",
+      selectionId: 6,
+    });
+    expect(container.textContent).not.toContain("Zamaskowano zaznaczony");
+
+    emit({ type: "SELECTION_STATE", state: "NONE" });
+    emit({
+      type: "ANALYSIS_SNAPSHOT",
+      revision: 2,
+      length: 10,
+      detections: [],
+    });
+    emit({
+      type: "MANUAL_MASK_RESULT",
+      status: "SUCCESS",
+      selectionId: 6,
+      resultRevision: 2,
+      remainingDetections: 0,
+      undoOperationId: 4,
+    });
+
+    expect(container.querySelector(".feedback-message")?.textContent).toBe(
+      "Zamaskowano zaznaczony fragment.",
+    );
+    expect(container.querySelector(".undo-mask")).not.toBeNull();
+  });
+
+  it("shows progress and success for masking started by the page shortcut", () => {
+    emit({ type: "HOST_STATUS", state: "READY" });
+    emit({
+      type: "ANALYSIS_SNAPSHOT",
+      revision: 1,
+      length: 13,
+      detections: [],
+    });
+    emit({ type: "SELECTION_STATE", state: "READY", selectionId: 11 });
+    emit({ type: "MANUAL_MASK_STARTED", selectionId: 11 });
+
+    expect(
+      [...container.querySelectorAll<HTMLButtonElement>("button")].every(
+        ({ disabled }) => disabled,
+      ),
+    ).toBe(true);
+
+    emit({ type: "SELECTION_STATE", state: "NONE" });
+    emit({
+      type: "ANALYSIS_SNAPSHOT",
+      revision: 2,
+      length: 8,
+      detections: [],
+    });
+    emit({
+      type: "MANUAL_MASK_RESULT",
+      status: "SUCCESS",
+      selectionId: 11,
+      resultRevision: 2,
+      remainingDetections: 0,
+      undoOperationId: 5,
+    });
+
+    expect(container.querySelector(".feedback-message")?.textContent).toBe(
+      "Zamaskowano zaznaczony fragment.",
+    );
+    expect(container.querySelector(".undo-mask")).not.toBeNull();
   });
 
   it("announces success only after the updated snapshot and result", () => {

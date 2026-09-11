@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   createMaskedPreview,
   createMaskingPlan,
+  createManualMaskingPlan,
   createPlaceholder,
   replaceDetection,
 } from "../src/core/masking";
@@ -73,5 +74,37 @@ describe("masking helpers", () => {
 
     expect(createMaskingPlan("600700800", [phone])).toBeNull();
     expect(createMaskingPlan(current, [phone, overlap])).toBeNull();
+  });
+
+  it("masks exactly one manual UTF-16 range and increments DANE placeholders", () => {
+    const text = "🙂 Jan Testowy i [DANE_3] oraz Jan Testowy";
+    const start = text.lastIndexOf("Jan Testowy");
+    const result = createManualMaskingPlan(text, {
+      start,
+      end: start + "Jan Testowy".length,
+    });
+
+    expect(result).toEqual({
+      status: "READY",
+      plan: {
+        text: "🙂 Jan Testowy i [DANE_3] oraz [DANE_4]",
+        caret: "🙂 Jan Testowy i [DANE_3] oraz [DANE_4]".length,
+      },
+    });
+  });
+
+  it("rejects empty, whitespace-only and generated-placeholder overlaps", () => {
+    expect(createManualMaskingPlan("abc", { start: 1, end: 1 })).toEqual({
+      status: "INVALID",
+    });
+    expect(createManualMaskingPlan("a \n b", { start: 1, end: 4 })).toEqual({
+      status: "INVALID",
+    });
+    expect(
+      createManualMaskingPlan("x [EMAIL_1] y", { start: 4, end: 10 }),
+    ).toEqual({ status: "PLACEHOLDER_OVERLAP" });
+    expect(createManualMaskingPlan("x [JSON] y", { start: 2, end: 8 })).toMatchObject({
+      status: "READY",
+    });
   });
 });

@@ -1,5 +1,9 @@
 import type { SensitiveDetection } from "../../core/detection";
-import { createMaskedPreview } from "../../core/masking";
+import {
+  createManualMaskingPlan,
+  createMaskedPreview,
+  type MaskingPlan,
+} from "../../core/masking";
 import { detectSensitiveData } from "../../detectors/sensitive-data";
 import {
   MAX_TEXT_LENGTH,
@@ -7,6 +11,7 @@ import {
   isPanelCommand,
   type AnalysisSnapshot,
   type HostStatus,
+  type ManualMaskCommand,
   type MaskCommand,
   type PanelEvent,
   type UndoCommand,
@@ -24,6 +29,9 @@ import {
   type UndoDraftState,
   type UndoRecord,
 } from "./undo-record";
+import { SelectionController } from "./selection-controller";
+import { matchesSelectionDraft } from "./selection-record";
+import { ManualMaskShortcut } from "./manual-mask-shortcut";
 
 const panelPorts = new Set<chrome.runtime.Port>();
 let observer: MutationObserver | null = null;
@@ -40,6 +48,8 @@ let changeGeneration = 0;
 let nextOperationId = 1;
 let undoRecord: UndoRecord | null = null;
 let writeInProgress = false;
+let selectionController: SelectionController;
+let manualMaskShortcut: ManualMaskShortcut | null = null;
 
 const postToPanel = (port: chrome.runtime.Port, event: PanelEvent): void => {
   try {
@@ -84,6 +94,7 @@ const currentUndoDraftState = (): UndoDraftState | null =>
 
 const markIndependentChange = (): void => {
   changeGeneration += 1;
+  selectionController.discard();
   discardUndo("DRAFT_CHANGED");
 };
 
@@ -106,6 +117,7 @@ const scanComposer = (): void => {
   const nextComposer = findNativeComposer(document);
   if (!nextComposer) {
     contextGeneration += 1;
+    selectionController.discard();
     discardUndo("CONTEXT_CHANGED");
     composer = null;
     lastSnapshot = null;
@@ -123,6 +135,7 @@ const scanComposer = (): void => {
   if (sourceChanged) {
     const hadSource = composer !== null || sourceUrl !== "";
     contextGeneration += 1;
+    selectionController.discard();
     discardUndo("CONTEXT_CHANGED");
     composer = nextComposer;
     sourceUrl = nextSourceUrl;
@@ -171,6 +184,7 @@ const handleInput = (event: Event): void => {
       if (activeComposer !== composer || window.location.href !== sourceUrl) {
         contextGeneration += 1;
         changeGeneration += 1;
+        selectionController.discard();
         discardUndo("CONTEXT_CHANGED");
       } else {
         markIndependentChange();
@@ -188,6 +202,7 @@ const handleSubmit = (event: Event): void => {
   ) {
     contextGeneration += 1;
     changeGeneration += 1;
+    selectionController.discard();
     discardUndo("CONTEXT_CHANGED");
   }
 };
@@ -218,6 +233,66 @@ const invalidateAfterUncertainWrite = (): void => {
   scanComposer();
 };
 
+selectionController = new SelectionController({
+  findComposer: () => findNativeComposer(document),
+  getDraft: currentUndoDraftState,
+  getUrl: () => window.location.href,
+  onState: (state) => {
+    broadcast(state);
+    if (state.state === "READY" && composer) {
+      manualMaskShortcut?.show(composer, state.selectionId);
+    } else {
+      manualMaskShortcut?.hide();
+    }
+  },
+  onStaleContext: scheduleScan,
+  shouldPreserveSelection: (event) =>
+    manualMaskShortcut?.containsEvent(event) ?? false,
+});
+
+const commitMaskingPlan = (
+  plan: MaskingPlan,
+  before: UndoDraftState,
+  previousCaret: number,
+  count: number,
+): number | null => {
+  if (
+    !composer ||
+    plan.text.length > MAX_TEXT_LENGTH ||
+    !hasCurrentComposerContext()
+  ) {
+    return null;
+  }
+  writeInProgress = true;
+  try {
+    if (!hasCurrentComposerContext()) throw new Error("STALE_MASK");
+    writeComposerText(composer, plan.text, plan.caret);
+  } catch {
+    invalidateAfterUncertainWrite();
+    return null;
+  }
+  if (readComposerText(composer) !== plan.text) {
+    invalidateAfterUncertainWrite();
+    return null;
+  }
+  scanComposer();
+  if (lastHostStatus.state !== "READY" || currentText !== plan.text) {
+    invalidateAfterUncertainWrite();
+    return null;
+  }
+  const operationId = nextOperationId++;
+  undoRecord = createUndoRecord(
+    operationId,
+    before,
+    revision,
+    plan.text,
+    previousCaret,
+    count,
+  );
+  writeInProgress = false;
+  return operationId;
+};
+
 const maskDetections = (message: unknown): void => {
   const prepared = prepareMaskCommand(
     message,
@@ -226,6 +301,7 @@ const maskDetections = (message: unknown): void => {
     detections,
   );
   if (prepared.status === "INVALID") return;
+  selectionController.discard();
   if (prepared.status === "STALE" || !hasCurrentComposerContext()) {
     scanComposer();
     broadcastMaskError(prepared.command, "STALE_TEXT");
@@ -248,40 +324,16 @@ const maskDetections = (message: unknown): void => {
     return;
   }
   const previousCaret = readComposerCaret(composer);
-  writeInProgress = true;
-  try {
-    writeComposerText(composer, prepared.plan.text, prepared.plan.caret);
-  } catch {
-    invalidateAfterUncertainWrite();
-    broadcastMaskError(prepared.command, "MASK_FAILED");
-    return;
-  }
-
-  if (readComposerText(composer) !== prepared.plan.text) {
-    invalidateAfterUncertainWrite();
-    broadcastMaskError(prepared.command, "MASK_FAILED");
-    return;
-  }
-
-  scanComposer();
-  if (
-    lastHostStatus.state !== "READY" ||
-    currentText !== prepared.plan.text
-  ) {
-    invalidateAfterUncertainWrite();
-    broadcastMaskError(prepared.command, "MASK_FAILED");
-    return;
-  }
-  const operationId = nextOperationId++;
-  undoRecord = createUndoRecord(
-    operationId,
+  const operationId = commitMaskingPlan(
+    prepared.plan,
     before,
-    revision,
-    prepared.plan.text,
     previousCaret,
     prepared.command.detectionIds.length,
   );
-  writeInProgress = false;
+  if (operationId === null) {
+    broadcastMaskError(prepared.command, "MASK_FAILED");
+    return;
+  }
   broadcast({
     type: "MASK_RESULT",
     status: "SUCCESS",
@@ -293,6 +345,72 @@ const maskDetections = (message: unknown): void => {
   });
 };
 
+const broadcastManualMaskError = (
+  command: ManualMaskCommand,
+  error: "MASK_FAILED" | "STALE_SELECTION",
+): void => {
+  broadcast({
+    type: "MANUAL_MASK_RESULT",
+    status: "ERROR",
+    selectionId: command.selectionId,
+    error,
+  });
+};
+
+const maskSelection = (command: ManualMaskCommand): void => {
+  const record = selectionController.record;
+  const current = currentUndoDraftState();
+  if (
+    writeInProgress ||
+    !record ||
+    record.selectionId !== command.selectionId ||
+    !current ||
+    !matchesSelectionDraft(record, current) ||
+    !hasCurrentComposerContext()
+  ) {
+    selectionController.discard();
+    scanComposer();
+    broadcastManualMaskError(command, "STALE_SELECTION");
+    return;
+  }
+  const prepared = createManualMaskingPlan(currentText, record);
+  if (prepared.status !== "READY") {
+    selectionController.discard();
+    broadcastManualMaskError(command, "MASK_FAILED");
+    return;
+  }
+  const previousCaret = readComposerCaret(record.composer);
+  selectionController.discard();
+  const operationId = commitMaskingPlan(
+    prepared.plan,
+    current,
+    previousCaret,
+    1,
+  );
+  if (operationId === null) {
+    broadcastManualMaskError(command, "MASK_FAILED");
+    return;
+  }
+  broadcast({
+    type: "MANUAL_MASK_RESULT",
+    status: "SUCCESS",
+    selectionId: command.selectionId,
+    resultRevision: revision,
+    remainingDetections: detections.length,
+    undoOperationId: operationId,
+  });
+};
+
+manualMaskShortcut = new ManualMaskShortcut((selectionId) => {
+  const record = selectionController.record;
+  if (writeInProgress || !record || record.selectionId !== selectionId) {
+    selectionController.discard();
+    return;
+  }
+  broadcast({ type: "MANUAL_MASK_STARTED", selectionId });
+  maskSelection({ type: "MASK_SELECTION", selectionId });
+});
+
 const broadcastUndoError = (command: UndoCommand): void => {
   broadcast({
     type: "UNDO_RESULT",
@@ -303,6 +421,7 @@ const broadcastUndoError = (command: UndoCommand): void => {
 };
 
 const undoMasking = (command: UndoCommand): void => {
+  selectionController.discard();
   const record = undoRecord;
   const current = currentUndoDraftState();
   if (
@@ -358,13 +477,27 @@ const undoMasking = (command: UndoCommand): void => {
 const handlePanelCommand = (message: unknown): void => {
   if (!isPanelCommand(message)) return;
   if (message.type === "MASK_DETECTIONS") maskDetections(message);
+  if (message.type === "MASK_SELECTION") maskSelection(message);
   if (message.type === "UNDO_MASK") undoMasking(message);
 };
 
 const activate = (): void => {
   if (observer) return;
+  manualMaskShortcut?.mount();
   document.addEventListener("input", handleInput, true);
   document.addEventListener("submit", handleSubmit, true);
+  document.addEventListener("select", selectionController.handleGesture, true);
+  document.addEventListener(
+    "pointerup",
+    selectionController.handleGesture,
+    true,
+  );
+  document.addEventListener("keyup", selectionController.handleGesture, true);
+  document.addEventListener(
+    "selectionchange",
+    selectionController.handleSelectionChange,
+    true,
+  );
   observer = new MutationObserver(scheduleScan);
   observer.observe(document.documentElement, {
     childList: true,
@@ -372,12 +505,34 @@ const activate = (): void => {
     subtree: true,
   });
   scanComposer();
+  if (composer) selectionController.capture(composer);
 };
 
 const deactivate = (): void => {
   document.removeEventListener("input", handleInput, true);
   document.removeEventListener("submit", handleSubmit, true);
+  document.removeEventListener(
+    "select",
+    selectionController.handleGesture,
+    true,
+  );
+  document.removeEventListener(
+    "pointerup",
+    selectionController.handleGesture,
+    true,
+  );
+  document.removeEventListener(
+    "keyup",
+    selectionController.handleGesture,
+    true,
+  );
+  document.removeEventListener(
+    "selectionchange",
+    selectionController.handleSelectionChange,
+    true,
+  );
   observer?.disconnect();
+  manualMaskShortcut?.unmount();
   observer = null;
   composer = null;
   sourceUrl = "";
@@ -387,6 +542,7 @@ const deactivate = (): void => {
   lastHostStatus = { type: "HOST_STATUS", state: "SEARCHING" };
   lastSnapshot = null;
   writeInProgress = false;
+  selectionController.reset();
   discardUndo("CONTEXT_CHANGED", false);
 };
 
@@ -408,6 +564,7 @@ chrome.runtime.onConnect.addListener((port) => {
   } else {
     postToPanel(port, lastHostStatus);
     if (lastSnapshot) postToPanel(port, lastSnapshot);
+    postToPanel(port, selectionController.state);
   }
   port.onMessage.addListener(handlePanelCommand);
   port.onDisconnect.addListener(() => {

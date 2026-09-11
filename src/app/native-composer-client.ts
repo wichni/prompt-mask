@@ -2,6 +2,7 @@ import {
   isPanelEvent,
   isSupportedChatGptUrl,
   PANEL_CONTENT_PORT,
+  type ManualMaskCommand,
   type MaskCommand,
   type PanelCommand,
   type PanelEvent,
@@ -11,6 +12,7 @@ import {
 export interface NativeComposerSession {
   disconnect: () => void;
   mask: (command: MaskCommand) => boolean;
+  maskSelection: (command: ManualMaskCommand) => boolean;
   undo: (command: UndoCommand) => boolean;
 }
 
@@ -96,6 +98,7 @@ export const watchNativeComposer = (
 
   return {
     mask: postCommand,
+    maskSelection: postCommand,
     undo: postCommand,
     disconnect: () => {
       disposed = true;

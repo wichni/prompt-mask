@@ -59,6 +59,51 @@ describe("panel message boundary", () => {
     expect(isPanelCommand({ ...command, operationId: -1 })).toBe(false);
   });
 
+  it("accepts only payload-free manual-selection messages", () => {
+    const command = { type: "MASK_SELECTION", selectionId: 7 };
+    const ready = {
+      type: "SELECTION_STATE",
+      state: "READY",
+      selectionId: 7,
+    };
+    const success = {
+      type: "MANUAL_MASK_RESULT",
+      status: "SUCCESS",
+      selectionId: 7,
+      resultRevision: 3,
+      remainingDetections: 0,
+      undoOperationId: 2,
+    };
+
+    expect(isPanelCommand(command)).toBe(true);
+    expect(isPanelCommand({ ...command, selectedText: "must not cross" })).toBe(
+      false,
+    );
+    expect(isPanelEvent(ready)).toBe(true);
+    expect(isPanelEvent({ ...ready, preview: "must not cross" })).toBe(false);
+    expect(isPanelEvent(success)).toBe(true);
+    expect(isPanelEvent({ ...success, originalText: "must not cross" })).toBe(
+      false,
+    );
+    expect(
+      isPanelEvent({
+        type: "SELECTION_STATE",
+        state: "INVALID",
+        reason: "PLACEHOLDER_OVERLAP",
+      }),
+    ).toBe(true);
+    expect(
+      isPanelEvent({ type: "MANUAL_MASK_STARTED", selectionId: 7 }),
+    ).toBe(true);
+    expect(
+      isPanelEvent({
+        type: "MANUAL_MASK_STARTED",
+        selectionId: 7,
+        selectedText: "must not cross",
+      }),
+    ).toBe(false);
+  });
+
   it("accepts only payload-free masking results", () => {
     const result = {
       type: "MASK_RESULT",
