@@ -31,6 +31,96 @@ describe("sensitive data detectors", () => {
       kind: "EMAIL",
       value: "anna.test@example.com",
     });
+    expect(detectSensitiveData("Napisz do qa=demo@example.com.")).toContainEqual(
+      expect.objectContaining({ kind: "EMAIL", value: "qa=demo@example.com" }),
+    );
+  });
+
+  it("excludes an assignment label from the email range", () => {
+    const text = "A email=ada.one@example.net status=422";
+
+    expect(detectSensitiveData(text)).toEqual([
+      {
+        kind: "EMAIL",
+        start: text.indexOf("ada.one@example.net"),
+        end: text.indexOf("ada.one@example.net") + "ada.one@example.net".length,
+        value: "ada.one@example.net",
+      },
+    ]);
+  });
+
+  it("does not classify URI credentials as email addresses", () => {
+    [
+      "DB failed: postgresql://tester:demo-db-P4ss@db.invalid/clinic",
+      "DB failed: postgresql://tester:email=demo@db.invalid/clinic",
+    ].forEach((text) => {
+      expect(detectSensitiveData(text).map(({ kind }) => kind)).not.toContain(
+        "EMAIL",
+      );
+    });
+  });
+
+  it("detects exact Bearer and URI password values as contextual secrets", () => {
+    const text =
+      "Authorization: Bearer demo.jwt.token-7X; " +
+      "db=postgresql://tester:demo-db-P4ss@db.invalid/clinic";
+
+    expect(detectSensitiveData(text)).toEqual([
+      {
+        kind: "SECRET",
+        start: text.indexOf("demo.jwt.token-7X"),
+        end: text.indexOf("demo.jwt.token-7X") + "demo.jwt.token-7X".length,
+        value: "demo.jwt.token-7X",
+      },
+      {
+        kind: "SECRET",
+        start: text.indexOf("demo-db-P4ss"),
+        end: text.indexOf("demo-db-P4ss") + "demo-db-P4ss".length,
+        value: "demo-db-P4ss",
+      },
+    ]);
+  });
+
+  it("uses the URI password position when the same value occurs in the host", () => {
+    const text = "postgresql://demo:demo@demo.invalid/clinic";
+    const passwordStart = text.indexOf(":demo@") + 1;
+
+    expect(detectSensitiveData(text)).toEqual([
+      {
+        kind: "SECRET",
+        start: passwordStart,
+        end: passwordStart + "demo".length,
+        value: "demo",
+      },
+    ]);
+  });
+
+  it.each([
+    "Authorization: Bearer",
+    "Opisuje nagłówek Authorization i słowo Bearer bez wartości.",
+    "postgresql://tester@db.invalid/clinic",
+    "Bearer demo.jwt.token-7X",
+    "X-Authorization: Bearer demo.jwt.token-7X",
+  ])("does not guess a contextual secret from incomplete prose: %s", (text) => {
+    expect(detectSensitiveData(text)).toEqual([]);
+  });
+
+  it("rejects masked and overlong contextual secret values", () => {
+    [
+      "Authorization: Bearer [SECRET_1]",
+      "postgresql://tester:[SECRET_1]@db.invalid/clinic",
+      `Authorization: Bearer ${"x".repeat(129)}; status=401`,
+      `postgresql://tester:${"x".repeat(129)}@db.invalid/clinic`,
+    ].forEach((text) => expect(detectSensitiveData(text)).toEqual([]));
+  });
+
+  it.each([
+    "E-mail:anna.test@example.com",
+    "notification=https://example.invalid/callback?email=anna.test@example.com",
+  ])("keeps a practical email in supported surrounding text: %s", (text) => {
+    expect(detectSensitiveData(text)).toContainEqual(
+      expect.objectContaining({ kind: "EMAIL", value: "anna.test@example.com" }),
+    );
   });
 
   it.each([

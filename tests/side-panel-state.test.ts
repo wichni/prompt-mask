@@ -59,6 +59,7 @@ describe("side panel state", () => {
       PATIENT_LAST_NAME: "Nazwisko pacjenta",
       PATIENT_ID: "Identyfikator pacjenta",
       PASSWORD: "Hasło",
+      SECRET: "Sekret",
     });
   });
 

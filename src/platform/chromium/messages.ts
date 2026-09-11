@@ -161,7 +161,8 @@ const isDetectionKind = (value: unknown): value is DetectionKind =>
   value === "PATIENT_FIRST_NAME" ||
   value === "PATIENT_LAST_NAME" ||
   value === "PATIENT_ID" ||
-  value === "PASSWORD";
+  value === "PASSWORD" ||
+  value === "SECRET";
 
 const isDetectionId = (value: unknown): value is string => {
   if (typeof value !== "string") return false;

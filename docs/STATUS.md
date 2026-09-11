@@ -10,10 +10,16 @@ Wersja manifestu: `0.1.0`
   pomocniczym na stronie jest mała kontrolka `[•••]` przy edytorze,
 - lokalna analiza tekstu podczas pisania,
 - detekcja PESEL z datą i sumą kontrolną,
-- detekcja praktycznych adresów e-mail i polskich numerów telefonu,
+- detekcja praktycznych adresów e-mail z zachowaniem etykiet przypisań i odmową
+  dla danych uwierzytelniających URI oraz polskich numerów telefonu,
 - detekcja wartości dokładnych pól `patientName`, `patientFirstName`,
   `patientLastName`, `patientId` i `password` w JSON oraz ograniczonym formacie
-  `klucz=wartość`, bez zgadywania nazwisk lub haseł w zwykłym tekście,
+  `klucz=wartość`, bez zgadywania nazwisk lub haseł w zwykłym tekście; pełna
+  wartość hasła wygrywa z zawartym PESEL-em, e-mailem lub telefonem, a błędne
+  cytowanie i istniejące oznaczenia nie dają częściowych wykryć,
+- detekcja typu SECRET dla wartości dokładnych pól `client_secret`, `api_key` i
+  `apiToken`, wartości po pełnym prefiksie nagłówka `Authorization: Bearer` oraz
+  hasła URI; cała wartość wygrywa z heurystykami i ma stały podgląd `•••`,
 - lista propozycji z typem i częściowo ukrytym podglądem,
 - biało-niebieski panel ze stałym miejscem na dostępny komunikat operacji,
 - jedna jawna akcja „Maskuj”; brak decyzji pozostawia propozycję widoczną,
@@ -33,7 +39,7 @@ Wersja manifestu: `0.1.0`
   nachodzącego na oznaczenie wygenerowane przez promptMask,
 - podmiana wyłącznie aktualnego zakresu na oznaczenie właściwego typu, w tym
   `[PATIENT_NAME_n]`, `[PATIENT_FIRST_NAME_n]`, `[PATIENT_LAST_NAME_n]`,
-  `[PATIENT_ID_n]` i `[PASSWORD_n]`,
+  `[PATIENT_ID_n]`, `[PASSWORD_n]` i `[SECRET_n]`,
 - potwierdzenie dopiero po rzeczywistej podmianie i ponownej analizie aktualnego
   tekstu,
 - jeden poziom „Cofnij” dla ostatniej potwierdzonej podmiany pojedynczej,
@@ -74,8 +80,8 @@ treści. Aktualna funkcja pomaga użytkownikowi zauważyć i zmienić dane przed
 - blokowanie wysłania przy nierozpatrzonych wykryciach,
 - spójna mapa oznaczeń w całej rozmowie i `chrome.storage.session`,
 - detekcja imion i nazwisk poza dokładnymi polami pacjenta, aliasów pól,
-  sekretów innych niż dokładne pole `password`, adresów pocztowych, dokumentów
-  i innych kategorii,
+  sekretów poza dokładnymi polami i kontekstami opisanymi wyżej, adresów
+  pocztowych, dokumentów i innych kategorii,
 - kopiowanie zatwierdzonego wyniku,
 - pakowanie ZIP i obsługa innych dostawców modeli.
 
@@ -83,16 +89,26 @@ treści. Aktualna funkcja pomaga użytkownikowi zauważyć i zmienić dane przed
 
 - `npm run typecheck` — zaliczony,
 - `npm run test:medical` — zaliczone testy: 19/19,
-- `npm test` — zaliczone testy: 161/161 w 11 plikach,
+- `npm test` — zaliczone testy: 210/210 w 11 plikach,
 - `npm run build` — zaliczony; manifest nie publikuje już zasobów dodatkowego
   pola, a content script pozostaje samodzielnym bundłem,
-- testy MED-002/MED-003 obejmują dokładne zakresy JSON i `klucz=wartość`,
+- testy MED-002/MED-003/MED-004 obejmują dokładne zakresy JSON i
+  `klucz=wartość`,
   odrzucenie swobodnego tekstu, niecytowanej nazwy, aliasów, wartości z
   ucieczkami, nadmiernej długości i wielu niedomkniętych kandydatów,
   pierwszeństwo jawnego `patientId` przed heurystyką telefonu i `password` przed
-  heurystyką e-maila, prywatny podgląd panelu, walidację komunikatów,
-  automatyczne maskowanie, poprawność JSON i brak pełnych wartości poza content
-  scriptem,
+  heurystykami PESEL-u, e-maila i telefonu, odmowę częściowego dopasowania
+  niedomkniętych lub nieobsługiwanych przypisań, brak ponownego maskowania
+  oznaczeń, prywatny podgląd panelu, walidację komunikatów, automatyczne
+  maskowanie, poprawność JSON i brak pełnych wartości poza content scriptem,
+- regresje granic e-maila potwierdzają dokładną wartość po `email=`, zachowanie
+  etykiet i separatorów, brak fałszywego e-maila dla
+  `scheme://user:password@host`, poprawne użycie po zwykłej etykiecie i w
+  parametrze URL oraz pełną ścieżkę maskowania i cofnięcia w content scripcie,
+- regresje sekretów obejmują dokładne pola JSON i przypisania, Bearer, hasło URI,
+  pierwszeństwo nad heurystykami, powtórzoną wartość w haśle i hoście, limity,
+  placeholdery, aliasy, niepełny kontekst, ścisłe komunikaty, podgląd `•••`,
+  maskowanie, ponowną analizę i cofnięcie bez przekazania wartości do panelu,
 - testy negatywne obejmują błędny PESEL, niejednoznaczny edytor, surowy tekst w
   komunikacie, obcy panel, nieaktualną decyzję, niepełny zestaw zbiorczy i
   powtórzone polecenie, unieważnienie cofania po edycji i wysłaniu, ręczny
@@ -121,34 +137,39 @@ treści. Aktualna funkcja pomaga użytkownikowi zauważyć i zmienić dane przed
 ## CI
 
 - Workflow `CI`, job `Verify`, zakończył się sukcesem po pushu do `main` dla
-  `65e3a1d95af8e0b3ae25cb50e742ebbde6decc9d`:
-  [run 34598199190](https://github.com/wichni/prompt-mask/actions/runs/34598199190).
-  W logu potwierdzono `npm ci`, typecheck, 121/121 testów i build na Node.js
-  `24.20.0` oraz npm `11.19.0`.
+  bazowego commita `6eadb8ac3676c11717ba76fe8dd27dea1f409c70`:
+  [run 34622445482](https://github.com/wichni/prompt-mask/actions/runs/34622445482).
+  W logu potwierdzono typecheck, 161/161 testów i build. Ten run nie obejmuje
+  roboczej poprawki MED-004.
 - Workflow obejmuje też pull requesty do `main` i uruchomienie ręczne. Zielony
   run nie jest dowodem wymaganej blokady scalania; w czasie przeglądu API GitHub
   zwracało dla `main` `protected: false`. Zmiany administracyjne repozytorium
   pozostają poza tym etapem.
-- Lokalny odpowiednik joba zaliczono na Node.js `24.21.0` i npm `11.19.0`:
-  czyste `npm ci`, `npm run typecheck`, `npm test` (121/121) oraz
-  `npm run build` zakończyły się kodem 0.
+- Dla roboczych zmian do etapu sekretów kontekstowych lokalnie zaliczono
+  `npm run typecheck`, `npm test` (210/210), `npm run test:medical` (19/19),
+  `npm run build` i `git diff --check`. Nie uruchamiano dla nich zdalnego CI.
 
-## Pomiar MED-001 po MED-003
+## Pomiar MED-001 po dodaniu sekretów kontekstowych
 
-- W stanie roboczym na bazie `65e3a1d95af8e0b3ae25cb50e742ebbde6decc9d`
+- W stanie roboczym na bazie `6eadb8ac3676c11717ba76fe8dd27dea1f409c70`
   istnieją 24 syntetyczne przypadki, 28 niezależnych oznaczeń ochrony, jawna
   baza wyników obecnego silnika oraz testy obliczeń i podmiany.
 - Dla kategorii obsługiwanych i reprezentowanych w korpusie dokładne wyniki to
-  TP 16, FN 6 i FP 4 (czułość 72,73%, precyzja 80,00%). Dla pełnego
-  oczekiwanego zakresu: TP 16, FN 12 i FP 4 (czułość 57,14%, precyzja 80,00%).
+  TP 24, FN 4 i FP 1 (czułość 85,71%, precyzja 96,00%). Pełny oczekiwany zakres
+  ma te same wyniki, ponieważ wszystkie oznaczone kategorie mają obecnie jawny
+  detektor.
   Pola `patientFirstName` i `patientLastName` mają testy jednostkowe i
   integracyjne, ale nie występują w korpusie MED-001-v1. Szczegóły są w
   [`MEDICAL_EVALUATION.md`](MEDICAL_EVALUATION.md).
 - MED-002 zamyka oczekiwania `patientName` i `patientId` z `MED-06`, `MED-07`
   oraz części `MIX-02`. MED-003 wykrywa hasła z `SEC-01` i `MIX-02` oraz dodaje
-  osobne pola imienia i nazwiska. Nadal widoczne są za szerokie zakresy e-maila,
-  telefoniczny fałszywy alarm, pozostałe sekrety oraz nazwy pacjentów poza
-  dokładnymi polami.
+  osobne pola imienia i nazwiska. MED-004 dodaje regresje poza korpusem dla
+  pełnego hasła zawierającego PESEL i bezpiecznych granic przypisań; nie zmienia
+  golda ani metryk MED-001-v1. Kolejna korekta zmienia wyłącznie bazę wyników
+  silnika: e-maile w `MIX-04` mają dokładne zakresy, a `SEC-04` nie daje
+  fałszywego e-maila. Etap sekretów dodaje sześć dokładnych TP bez zmiany golda.
+  Nadal widoczne są telefoniczny fałszywy alarm, nieobsługiwane konteksty
+  sekretów oraz nazwy pacjentów poza dokładnymi polami.
 
 ## Dowody interfejsu
 
@@ -181,6 +202,14 @@ Zrzut użytkownika z 18:17 potwierdza w Chrome wykrycie dokładnego pola
 jest wykryty, co było punktem wejścia MED-003. Zrzut nie potwierdza podmiany ani
 działania pól dodanych w MED-003; wymaga to odbioru po ponownym buildzie i
 przeładowaniu rozszerzenia.
+MED-004 ma wyłącznie dowód automatyczny. Pełne hasło zawierające PESEL, brak
+ponownego wykrycia oznaczenia i odmowa prefiksu niedomkniętego przypisania nie
+zostały jeszcze odebrane ręcznie w Chrome ani Edge.
+Korekta granic e-maila również ma wyłącznie dowód automatyczny; zachowanie
+`email=` i odmowa dla danych uwierzytelniających URI nie zostały odebrane
+ręcznie w Chrome ani Edge.
+Sekrety kontekstowe również mają tylko dowód automatyczny; ich podgląd,
+maskowanie i cofnięcie nie zostały odebrane ręcznie w Chrome ani Edge.
 
 ## Wymagany odbiór użytkownika
 
@@ -206,7 +235,7 @@ uszkodzonych celów.
 ## Bieżący etap
 
 CI-001 ma udany przebieg dla wskazanej rewizji, ale nie jest wymuszoną blokadą
-scalania. MED-003 dodaje w stanie roboczym wąskie detektory pól
-`patientFirstName`, `patientLastName` i `password`; nie obejmuje pozostałych
-sekretów ani swobodnego tekstu. Bieżąca zmiana nie ma jeszcze wyniku zdalnego CI
-ani ręcznego odbioru Chrome/Edge.
+scalania. Stan roboczy obejmuje MED-004, granice e-maila oraz kontekstowe sekrety
+z korpusu; nie obejmuje aliasów ani sekretów w swobodnym tekście. Lokalnie
+zaliczono typecheck, 210/210 testów, 19/19 testów korpusu i build. Bieżąca zmiana
+nie ma jeszcze wyniku zdalnego CI ani ręcznego odbioru Chrome/Edge.

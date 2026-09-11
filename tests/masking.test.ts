@@ -74,6 +74,33 @@ describe("masking helpers", () => {
     expect(() => JSON.parse(expected)).not.toThrow();
   });
 
+  it("masks a whole password containing a PESEL and leaves outside data detectable", () => {
+    const text =
+      '{"password":"demo:02070803628:tail","pesel":"02070803628"}';
+    const detections = detectSensitiveData(text);
+
+    expect(detections.map(({ kind, value }) => ({ kind, value }))).toEqual([
+      { kind: "PASSWORD", value: "demo:02070803628:tail" },
+      { kind: "PESEL", value: "02070803628" },
+    ]);
+    expect(createMaskingPlan(text, detections)?.text).toBe(
+      '{"password":"[PASSWORD_1]","pesel":"[PESEL_1]"}',
+    );
+  });
+
+  it("masks contextual secrets without changing their structural context", () => {
+    const text =
+      "client_secret=demo-client-Z8x!; " +
+      "Authorization: Bearer demo.jwt.token-7X; " +
+      "postgresql://tester:demo-db-P4ss@db.invalid/clinic";
+
+    expect(createMaskingPlan(text, detectSensitiveData(text))?.text).toBe(
+      "client_secret=[SECRET_1]; " +
+        "Authorization: Bearer [SECRET_2]; " +
+        "postgresql://tester:[SECRET_3]@db.invalid/clinic",
+    );
+  });
+
   it("increments placeholders already present in the draft", () => {
     expect(createPlaceholder("PHONE", "Kontakt [PHONE_1] i [PHONE_3]")).toBe(
       "[PHONE_4]",
@@ -122,6 +149,15 @@ describe("masking helpers", () => {
         },
       ],
     });
+  });
+
+  it("preserves email assignment labels and record separators", () => {
+    const text =
+      "A email=ada.one@example.net status=422\nB email=ben.two@example.net status=409";
+
+    expect(createMaskingPlan(text, detectSensitiveData(text))?.text).toBe(
+      "A email=[EMAIL_1] status=422\nB email=[EMAIL_2] status=409",
+    );
   });
 
   it("rejects the whole plan when a range is stale or overlaps another", () => {
@@ -181,6 +217,9 @@ describe("masking helpers", () => {
     ).toEqual({ status: "PLACEHOLDER_OVERLAP" });
     expect(
       createManualMaskingPlan("x [PASSWORD_1] y", { start: 5, end: 11 }),
+    ).toEqual({ status: "PLACEHOLDER_OVERLAP" });
+    expect(
+      createManualMaskingPlan("x [SECRET_1] y", { start: 5, end: 9 }),
     ).toEqual({ status: "PLACEHOLDER_OVERLAP" });
     expect(createManualMaskingPlan("x [JSON] y", { start: 2, end: 8 })).toMatchObject({
       status: "READY",

@@ -21,7 +21,7 @@ warstwy DOM lub platformy.
 - tekst wpisany albo wklejony do natywnego pola rozmowy,
 - lokalna detekcja PESEL, praktycznych adresów e-mail, polskich telefonów oraz
   jawnych pól `patientName`, `patientFirstName`, `patientLastName`, `patientId`
-  i `password`,
+  i `password`, a także ograniczonych kontekstów sekretów technicznych,
 - lista propozycji z typem, ukrytym podglądem i decyzją,
 - ręczne wskazanie dodatkowego fragmentu,
 - deterministyczne rozstrzyganie nakładających się zakresów,
@@ -36,23 +36,26 @@ zawsze opisany w `STATUS.md`.
 
 Obecnie działają detektory PESEL-u, praktycznych adresów e-mail, polskich
 numerów telefonu oraz wartości dokładnych pól `patientName`,
-`patientFirstName`, `patientLastName`, `patientId` i `password` w ograniczonych
-strukturach. Dostępne jest też ręczne maskowanie wskazanego fragmentu.
+`patientFirstName`, `patientLastName`, `patientId`, `password`, `client_secret`,
+`api_key` i `apiToken` w ograniczonych strukturach. Rozpoznawane są też wartości
+po pełnym prefiksie nagłówka Bearer i hasła URI. Dostępne jest ręczne maskowanie
+wskazanego fragmentu.
 Rzeczywisty zakres i dowody są kanonicznie opisane w `STATUS.md`.
 
 Syntetyczny zestaw MED-001 mierzy obecne wykrycia, pominięcia i fałszywe alarmy;
 wyniki i uzasadnienie kolejności są w
 [`MEDICAL_EVALUATION.md`](MEDICAL_EVALUATION.md). Jawne pola pacjenta są
 obsługiwane w wąskim zakresie MED-002, a MED-003 dodaje dokładne pola imienia,
-nazwiska i hasła. Następnym kandydatem jest korekta granic istniejącego
-detektora e-mail dla logów i URI, a potem pozostałe kontekstowe sekrety
-techniczne. Rozszerzanie nazw pacjentów poza jawne pola wymaga osobnego korpusu
-negatywnego. Każda pozycja wymaga osobno zatwierdzonego etapu. Dowolnego hasła
-lub nazwiska w swobodnym zdaniu nie należy przedstawiać jako możliwego do
-niezawodnego wykrycia.
+nazwiska i hasła. MED-004 domyka pierwszeństwo pełnej wartości hasła oraz
+bezpieczne granice ograniczonych przypisań. Osobny zatwierdzony etap domknął
+granice detektora e-mail dla przypisań w logach i danych uwierzytelniających URI.
+Obecny etap domyka kontekstowe sekrety techniczne mierzone przez korpus.
+Kolejnym kandydatem są nazwy pacjentów poza jawnymi polami, co wymaga osobnego
+korpusu negatywnego. Dowolnego hasła, sekretu lub nazwiska w swobodnym zdaniu nie
+należy przedstawiać jako możliwego do niezawodnego wykrycia.
 
-Ten kierunek nie oznacza, że wymienione detektory, pilotaż lub pakiet
-instalacyjny są już zaimplementowane.
+Ten kierunek nie oznacza, że wszystkie funkcje docelowego prototypu, pilotaż lub
+pakiet instalacyjny są już zaimplementowane.
 
 ## Poza pierwszym prototypem
 

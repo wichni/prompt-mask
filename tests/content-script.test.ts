@@ -155,6 +155,38 @@ describe("native composer analysis", () => {
     );
   });
 
+  it("masks only an assigned email value and restores the exact log on undo", () => {
+    const textarea = document.querySelector<HTMLTextAreaElement>("textarea")!;
+    const original = "email=ada.one@example.net; status=422";
+    textarea.value = original;
+    const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
+    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    const snapshot = snapshots(panel).at(-1)!;
+
+    expect(snapshot.detections).toEqual([
+      expect.objectContaining({ kind: "EMAIL", maskedPreview: "a•••@e•••.net" }),
+    ]);
+    expect(JSON.stringify(panel.postMessage.mock.calls)).not.toContain(
+      "ada.one@example.net",
+    );
+
+    panel.fireMessage({
+      type: "MASK_DETECTIONS",
+      sessionId: snapshot.sessionId,
+      revision: snapshot.revision,
+      detectionIds: snapshot.detections.map(({ id }) => id),
+    });
+
+    expect(textarea.value).toBe("email=[EMAIL_1]; status=422");
+    expect(snapshots(panel).at(-1)?.detections).toEqual([]);
+    const result = maskResults(panel).at(-1)!;
+    if (result.status !== "SUCCESS") throw new Error("Expected mask success");
+    panel.fireMessage({ type: "UNDO_MASK", operationId: result.undoOperationId });
+
+    expect(textarea.value).toBe(original);
+    expect(undoResults(panel).at(-1)).toMatchObject({ status: "SUCCESS" });
+  });
+
   it("masks structured patient fields without forwarding their values", () => {
     const textarea = document.querySelector<HTMLTextAreaElement>("textarea")!;
     textarea.value =
@@ -195,6 +227,115 @@ describe("native composer analysis", () => {
       '{"patientName":"[PATIENT_NAME_1]","patientFirstName":"[PATIENT_FIRST_NAME_1]","patientLastName":"[PATIENT_LAST_NAME_1]","patientId":"[PATIENT_ID_1]","password":"[PASSWORD_1]","error":"E_17"}',
     );
     expect(() => JSON.parse(textarea.value)).not.toThrow();
+  });
+
+  it("masks contextual secrets without forwarding them and restores them on undo", () => {
+    const textarea = document.querySelector<HTMLTextAreaElement>("textarea")!;
+    const original =
+      "client_secret=demo-client-Z8x!; Authorization: Bearer demo.jwt.token-7X";
+    textarea.value = original;
+    const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
+    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    const snapshot = snapshots(panel).at(-1)!;
+
+    expect(snapshot.detections).toEqual([
+      expect.objectContaining({ kind: "SECRET", maskedPreview: "•••" }),
+      expect.objectContaining({ kind: "SECRET", maskedPreview: "•••" }),
+    ]);
+    expect(JSON.stringify(panel.postMessage.mock.calls)).not.toContain(
+      "demo-client-Z8x!",
+    );
+    expect(JSON.stringify(panel.postMessage.mock.calls)).not.toContain(
+      "demo.jwt.token-7X",
+    );
+
+    panel.fireMessage({
+      type: "MASK_DETECTIONS",
+      sessionId: snapshot.sessionId,
+      revision: snapshot.revision,
+      detectionIds: snapshot.detections.map(({ id }) => id),
+    });
+
+    expect(textarea.value).toBe(
+      "client_secret=[SECRET_1]; Authorization: Bearer [SECRET_2]",
+    );
+    expect(snapshots(panel).at(-1)?.detections).toEqual([]);
+    const result = maskResults(panel).at(-1)!;
+    if (result.status !== "SUCCESS") throw new Error("Expected mask success");
+    panel.fireMessage({ type: "UNDO_MASK", operationId: result.undoOperationId });
+
+    expect(textarea.value).toBe(original);
+    expect(undoResults(panel).at(-1)).toMatchObject({ status: "SUCCESS" });
+  });
+
+  it("masks a complete JSON password containing a PESEL and restores it on undo", () => {
+    const textarea = document.querySelector<HTMLTextAreaElement>("textarea")!;
+    const original = '{"password":"demo:02070803628:tail"}';
+    textarea.value = original;
+    const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
+    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    const snapshot = snapshots(panel).at(-1)!;
+
+    expect(snapshot.detections).toEqual([
+      expect.objectContaining({ kind: "PASSWORD", maskedPreview: "•••" }),
+    ]);
+    expect(JSON.stringify(panel.postMessage.mock.calls)).not.toContain(
+      "02070803628",
+    );
+
+    panel.fireMessage({
+      type: "MASK_DETECTIONS",
+      sessionId: snapshot.sessionId,
+      revision: snapshot.revision,
+      detectionIds: snapshot.detections.map(({ id }) => id),
+    });
+
+    expect(textarea.value).toBe('{"password":"[PASSWORD_1]"}');
+    expect(snapshots(panel).at(-1)?.detections).toEqual([]);
+    const result = maskResults(panel).at(-1)!;
+    if (result.status !== "SUCCESS") throw new Error("Expected mask success");
+    panel.fireMessage({ type: "UNDO_MASK", operationId: result.undoOperationId });
+
+    expect(textarea.value).toBe(original);
+    expect(snapshots(panel).at(-1)?.detections).toEqual([
+      expect.objectContaining({ kind: "PASSWORD", maskedPreview: "•••" }),
+    ]);
+    expect(undoResults(panel).at(-1)).toMatchObject({ status: "SUCCESS" });
+  });
+
+  it("masks a bare password assignment once and restores it on undo", () => {
+    const textarea = document.querySelector<HTMLTextAreaElement>("textarea")!;
+    const original = "password=Tmp!Pass-44; status=401";
+    textarea.value = original;
+    const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
+    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    const snapshot = snapshots(panel).at(-1)!;
+
+    expect(snapshot.detections).toEqual([
+      expect.objectContaining({ kind: "PASSWORD", maskedPreview: "•••" }),
+    ]);
+    expect(JSON.stringify(panel.postMessage.mock.calls)).not.toContain(
+      "Tmp!Pass-44",
+    );
+
+    panel.fireMessage({
+      type: "MASK_DETECTIONS",
+      sessionId: snapshot.sessionId,
+      revision: snapshot.revision,
+      detectionIds: snapshot.detections.map(({ id }) => id),
+    });
+
+    expect(textarea.value).toBe("password=[PASSWORD_1]; status=401");
+    expect(snapshots(panel).at(-1)?.detections).toEqual([]);
+    const result = maskResults(panel).at(-1)!;
+    if (result.status !== "SUCCESS") throw new Error("Expected mask success");
+    panel.fireMessage({ type: "UNDO_MASK", operationId: result.undoOperationId });
+
+    expect(textarea.value).toBe(original);
+    expect(snapshots(panel).at(-1)?.detections).toEqual([
+      expect.objectContaining({ kind: "PASSWORD", maskedPreview: "•••" }),
+    ]);
+    expect(undoResults(panel).at(-1)).toMatchObject({ status: "SUCCESS" });
   });
 
   it("rescans the native field after a user input event", () => {

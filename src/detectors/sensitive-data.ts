@@ -4,11 +4,15 @@ import {
   type SensitiveDetection,
 } from "../core/detection";
 import { detectStructuredSensitiveData } from "./structured-sensitive-data";
+import { detectContextualSecrets } from "./contextual-secret-data";
 
 const EMAIL_PATTERN = /[a-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[a-z0-9!#$%&'*+/=?^_`{|}~-]+)*@[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+/giu;
 const PESEL_PATTERN = /\d{11}/gu;
 const PHONE_PATTERN = /(?:\+48[ -]?)?[1-9](?:[ -]?\d){8}/gu;
 const TOKEN_BOUNDARY = /[\p{L}\p{N}+_@-]/u;
+// A match after `scheme://user:` is URI credential data, not an e-mail.
+const URI_PASSWORD_PREFIX = /[a-z][a-z0-9+.-]*:\/\/[^\s/@]*:$/iu;
+const URI_SCHEME_PREFIX = /[a-z][a-z0-9+.-]*:$/iu;
 
 const isBounded = (text: string, start: number, end: number): boolean =>
   !TOKEN_BOUNDARY.test(text[start - 1] ?? "") &&
@@ -17,6 +21,25 @@ const isBounded = (text: string, start: number, end: number): boolean =>
 const isEmailBounded = (text: string, start: number, end: number): boolean =>
   !/[\p{L}\p{N}.+_@-]/u.test(text[start - 1] ?? "") &&
   !TOKEN_BOUNDARY.test(text[end] ?? "");
+
+const isUriUserInfoCandidate = (
+  text: string,
+  start: number,
+  candidate: string,
+  valueOffset: number,
+): boolean =>
+  URI_PASSWORD_PREFIX.test(text.slice(0, start)) ||
+  (valueOffset === 0 &&
+    candidate.startsWith("//") &&
+    URI_SCHEME_PREFIX.test(text.slice(0, start)));
+
+const emailValueOffset = (candidate: string): number => {
+  const at = candidate.lastIndexOf("@");
+  const assignment = candidate.lastIndexOf("=", at);
+  if (assignment < 0) return 0;
+  const prefix = candidate.slice(0, assignment);
+  return /(?:^|[?&])email$/iu.test(prefix) ? assignment + 1 : 0;
+};
 
 const isValidDate = (year: number, month: number, day: number): boolean => {
   const date = new Date(Date.UTC(year, month - 1, day));
@@ -86,22 +109,43 @@ const collectMatches = (
         validate(detection.value),
     );
 
+const collectEmailMatches = (text: string): SensitiveDetection[] =>
+  [...text.matchAll(EMAIL_PATTERN)]
+    .flatMap((match) => {
+      if (match.index === undefined) return [];
+      const offset = emailValueOffset(match[0]);
+      if (isUriUserInfoCandidate(text, match.index, match[0], offset)) return [];
+      const value = match[0].slice(offset);
+      const start = match.index + offset;
+      return [
+        { kind: "EMAIL" as const, start, end: start + value.length, value },
+      ];
+    })
+    .filter((detection) =>
+      isEmailBounded(text, detection.start, detection.end),
+    );
+
+// An exact password field is a trusted structural container, so it must hide
+// any heuristic PESEL, e-mail or phone match inside its complete value. This is
+// deliberately contextual; range length alone never decides a conflict.
 const priority: Record<DetectionKind, number> = {
-  PESEL: 0,
-  PATIENT_NAME: 1,
-  PATIENT_FIRST_NAME: 1,
-  PATIENT_LAST_NAME: 1,
-  PATIENT_ID: 1,
-  PASSWORD: 1,
-  EMAIL: 2,
-  PHONE: 3,
+  PASSWORD: 0,
+  SECRET: 0,
+  PESEL: 1,
+  PATIENT_NAME: 2,
+  PATIENT_FIRST_NAME: 2,
+  PATIENT_LAST_NAME: 2,
+  PATIENT_ID: 2,
+  EMAIL: 3,
+  PHONE: 4,
 };
 
 export const detectSensitiveData = (text: string): SensitiveDetection[] => {
   const candidates = [
     ...collectMatches(text, PESEL_PATTERN, "PESEL", isValidPesel),
     ...detectStructuredSensitiveData(text),
-    ...collectMatches(text, EMAIL_PATTERN, "EMAIL", () => true, isEmailBounded),
+    ...detectContextualSecrets(text),
+    ...collectEmailMatches(text),
     ...collectMatches(text, PHONE_PATTERN, "PHONE"),
   ].sort(
     (left, right) =>

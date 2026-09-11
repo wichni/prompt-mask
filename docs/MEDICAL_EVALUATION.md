@@ -4,10 +4,10 @@
 
 - zestaw: `MED-001-v1`, 24 przypadki i 28 oznaczonych zakresów ochrony,
 - badany stan: roboczy na bazie
-  `65e3a1d95af8e0b3ae25cb50e742ebbde6decc9d`,
-- silnik: stan roboczy po MED-003 z detektorami PESEL, e-maila, telefonu oraz
-  dokładnych pól `patientName`, `patientFirstName`, `patientLastName`,
-  `patientId` i `password`,
+  `6eadb8ac3676c11717ba76fe8dd27dea1f409c70`,
+- silnik: stan roboczy po MED-004, korekcie granic e-maila i dodaniu
+  kontekstowych sekretów, z detektorami PESEL, e-maila, telefonu, dokładnych pól
+  pacjenta i hasła oraz typu SECRET dla zatwierdzonych kontekstów,
 - dane: wyłącznie wartości utworzone na potrzeby testów; bez logów firmy,
   danych pacjentów i działających sekretów.
 
@@ -37,14 +37,14 @@ różnic i świadomej aktualizacji tego raportu.
 | Zakres | TP | FN | FP | Czułość | Precyzja |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | PESEL | 2 | 2 | 0 | 50,00% | 100,00% |
-| E-mail | 5 | 2 | 3 | 71,43% | 62,50% |
+| E-mail | 7 | 0 | 0 | 100,00% | 100,00% |
 | Telefon | 4 | 0 | 1 | 100,00% | 80,00% |
 | Nazwa pacjenta | 1 | 2 | 0 | 33,33% | 100,00% |
 | Identyfikator pacjenta | 2 | 0 | 0 | 100,00% | 100,00% |
 | Hasło | 2 | 0 | 0 | 100,00% | 100,00% |
-| Kategorie obsługiwane i reprezentowane w korpusie | 16 | 6 | 4 | 72,73% | 80,00% |
-| Pozostały sekret | 0 | 6 | 0 | 0,00% | nie dotyczy |
-| Pełny oczekiwany zakres | 16 | 12 | 4 | 57,14% | 80,00% |
+| Kategorie obsługiwane i reprezentowane w korpusie | 24 | 4 | 1 | 85,71% | 96,00% |
+| Sekret techniczny | 6 | 0 | 0 | 100,00% | 100,00% |
+| Pełny oczekiwany zakres | 24 | 4 | 1 | 85,71% | 96,00% |
 
 Pola `patientFirstName` i `patientLastName` są objęte testami jednostkowymi i
 integracyjnymi, ale MED-001-v1 nie zawiera jeszcze osobnych oznaczeń tych
@@ -63,13 +63,13 @@ W jednym z sześciu przypadków bez danych do ukrycia wystąpił fałszywy alarm
 | MED-07 | 1 | 0 | 0 | dokładna wartość `patientId` w przypisaniu |
 | MED-08 | 2 | 0 | 0 | oba wystąpienia e-maila wykryte |
 | SEC-01 | 1 | 0 | 0 | dokładna wartość `password` w JSON |
-| SEC-02 | 0 | 2 | 0 | dwa sekrety konfiguracji pominięte |
-| SEC-03 | 0 | 1 | 0 | token Bearer pominięty |
-| SEC-04 | 0 | 1 | 1 | hasło i host URI uznane łącznie za e-mail |
-| MIX-01 | 1 | 1 | 0 | PESEL wykryty, token pominięty |
+| SEC-02 | 2 | 0 | 0 | dokładne `client_secret` i `api_key` |
+| SEC-03 | 1 | 0 | 0 | dokładna wartość Bearer |
+| SEC-04 | 1 | 0 | 0 | dokładne hasło URI bez fałszywego e-maila |
+| MIX-01 | 2 | 0 | 0 | dokładny PESEL i token Bearer |
 | MIX-02 | 3 | 0 | 0 | wykryte `patientId`, e-mail i `password` |
 | MIX-03 | 1 | 1 | 0 | telefon wykryty, nazwa pominięta |
-| MIX-04 | 2 | 2 | 2 | telefony dokładne, oba zakresy e-maili za szerokie |
+| MIX-04 | 4 | 0 | 0 | dokładne e-maile i telefony, etykiety zachowane |
 | NEG-01 | 0 | 0 | 0 | brak wykryć |
 | NEG-02 | 0 | 0 | 0 | brak wykryć |
 | NEG-03 | 0 | 0 | 0 | brak wykryć |
@@ -77,35 +77,38 @@ W jednym z sześciu przypadków bez danych do ukrycia wystąpił fałszywy alarm
 | NEG-05 | 0 | 0 | 0 | same nazwy pól zachowane |
 | NEG-06 | 0 | 0 | 0 | istniejące oznaczenia zachowane |
 | EDGE-01 | 1 | 1 | 0 | zakres e-maila poprawny po emoji, nazwa pominięta |
-| EDGE-02 | 0 | 1 | 0 | token w JSON pominięty |
+| EDGE-02 | 1 | 0 | 0 | dokładna wartość `apiToken` w JSON |
 
-W `MIX-04` wzorzec e-maila obejmuje także prefiks `email=`, więc wykrycie nie
-jest dokładnym trafieniem i automatyczna podmiana usuwa nazwę pola. W `SEC-04`
-fragment `hasło@host` w URI wygląda dla obecnego wzorca jak e-mail. `NEG-04`
+Korekta granic e-maila zachowuje etykiety `email=` w `MIX-04`. Kontekstowy
+detektor SECRET obejmuje sześć dokładnych wartości z `SEC-02`–`SEC-04`,
+`MIX-01` i `EDGE-02`, bez zmiany niezależnych adnotacji gold. `NEG-04` nadal
 pokazuje koszt szerokiej heurystyki telefonu.
+
+Poza bazowymi 24 przypadkami MED-004 dodaje regresje dla hasła zawierającego
+poprawny PESEL oraz dla granic cytowanych i niecytowanych przypisań. Pełna
+wartość dokładnego pola `password` pozostaje jednym wykryciem PASSWORD ze stałym
+podglądem, a niezamknięty, nieobsługiwany lub już zamaskowany zapis nie daje
+częściowego wykrycia. Te dodatkowe przypadki nie zmieniają golda ani powyższych
+metryk MED-001-v1.
 
 ## Kontrole tekstu
 
 Testy sprawdzają podmianę automatycznych wykryć, zachowanie kodów błędów,
 separatorów i kolejności rekordów oraz parsowalność reprezentatywnych JSON-ów.
-Strukturalne pola pacjenta i `password` mają kontrole automatycznej podmiany i
-parsowalności JSON. Nazwa w swobodnym tekście oraz pozostałe sekrety mają osobne
-kontrole ręcznego maskowania; nie poprawia to ich wyniku automatycznego.
+Strukturalne pola pacjenta, `password` i sekretów mają kontrole automatycznej
+podmiany i parsowalności JSON. Nazwa w swobodnym tekście ma osobną kontrolę
+ręcznego maskowania; nie poprawia to jej wyniku automatycznego.
 Przypadek z emoji potwierdza zakresy UTF-16, a przypadek z ucieczkami —
 nienaruszanie składni poza wybranym zakresem.
 
 ## Kolejność dalszych prac
 
-1. Naprawić dokładność granic e-maila dla formatu `klucz=wartość` i URI.
-   `MIX-04` oraz `SEC-04` odpowiadają za 2 FN i 3 FP, a obecne zakresy mogą
-   usuwać kontekst techniczny. Regresje muszą zachować poprawne wyniki z
-   `MED-04`, `MED-08`, `MIX-02` i `EDGE-01`.
-2. Dodać osobno zatwierdzany, kontekstowy detektor pozostałych sekretów dla
-   `client_secret`, kluczy API, nagłówka Bearer i hasła w URI. Obejmuje to 6 FN
-   z `SEC-02`–`SEC-04`, `MIX-01` i `EDGE-02`; `NEG-05` ma chronić przed
-   maskowaniem samej nazwy pola. Swobodny tekst nie powinien być traktowany jak
-   niezawodny sekret.
-3. Dopiero później rozważyć nazwy pacjentów poza dokładnymi polami. MED-002
+MED-004 zamyka pierwszeństwo pełnej wartości hasła i granice jego przypisań.
+Osobny zatwierdzony etap poprawił granice e-maila w `MIX-04` i `SEC-04`, a
+obecny domyka sześć sekretów kontekstowych w korpusie. Dalszy osobno zatwierdzany
+etap:
+
+1. Rozważyć nazwy pacjentów poza dokładnymi polami. MED-002
    zamyka `MED-06`, `MED-07` i część `MIX-02`, a MED-003 dodaje dokładne pola
    imienia i nazwiska, ale `MIX-03` i `EDGE-01` pozostają FN. Szersza detekcja
    nazw ma wysoki koszt fałszywych alarmów i wymaga osobnego korpusu negatywnego.

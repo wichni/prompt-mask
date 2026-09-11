@@ -6,7 +6,8 @@ export type DetectionKind =
   | "PATIENT_FIRST_NAME"
   | "PATIENT_LAST_NAME"
   | "PATIENT_ID"
-  | "PASSWORD";
+  | "PASSWORD"
+  | "SECRET";
 
 export interface SensitiveDetection {
   kind: DetectionKind;

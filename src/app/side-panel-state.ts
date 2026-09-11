@@ -66,6 +66,7 @@ export const detectionLabels: Record<DetectionSummary["kind"], string> = {
   PATIENT_LAST_NAME: "Nazwisko pacjenta",
   PATIENT_ID: "Identyfikator pacjenta",
   PASSWORD: "Hasło",
+  SECRET: "Sekret",
 };
 
 const maskedDataLabels: Record<DetectionSummary["kind"], string> = {
@@ -77,6 +78,7 @@ const maskedDataLabels: Record<DetectionSummary["kind"], string> = {
   PATIENT_LAST_NAME: "nazwisko pacjenta",
   PATIENT_ID: "identyfikator pacjenta",
   PASSWORD: "hasło",
+  SECRET: "sekret",
 };
 
 const MASK_CONFIRMATION_FAILED =

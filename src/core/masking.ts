@@ -26,7 +26,8 @@ export const createMaskedPreview = (
     detection.kind === "PATIENT_FIRST_NAME" ||
     detection.kind === "PATIENT_LAST_NAME" ||
     detection.kind === "PATIENT_ID" ||
-    detection.kind === "PASSWORD"
+    detection.kind === "PASSWORD" ||
+    detection.kind === "SECRET"
   ) {
     return MASK;
   }
@@ -135,6 +136,7 @@ export const createMaskingPlan = (
     PATIENT_LAST_NAME: nextPlaceholderNumber("PATIENT_LAST_NAME", text),
     PATIENT_ID: nextPlaceholderNumber("PATIENT_ID", text),
     PASSWORD: nextPlaceholderNumber("PASSWORD", text),
+    SECRET: nextPlaceholderNumber("SECRET", text),
   };
   const replacements = [...detections]
     .sort((left, right) => left.start - right.start)
@@ -162,7 +164,7 @@ export const replaceDetection = (
 };
 
 const GENERATED_PLACEHOLDER =
-  /\[(?:PESEL|EMAIL|PHONE|PATIENT_NAME|PATIENT_FIRST_NAME|PATIENT_LAST_NAME|PATIENT_ID|PASSWORD|DANE)_\d+\]/gu;
+  /\[(?:PESEL|EMAIL|PHONE|PATIENT_NAME|PATIENT_FIRST_NAME|PATIENT_LAST_NAME|PATIENT_ID|PASSWORD|SECRET|DANE)_\d+\]/gu;
 
 const overlapsGeneratedPlaceholder = (
   text: string,

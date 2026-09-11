@@ -111,7 +111,7 @@ wysłać surowy tekst, dlatego UI nie może sugerować pełnej ochrony.
 | globalna podmiana wartości | zakresy `[start, end)` i składanie tekstu bez globalnego `replace()` |
 | wyciek ręcznie wskazanej wartości | treść wyboru zostaje w content scripcie; panel dostaje tylko stan i liczbowy identyfikator |
 | użycie ukrytego starego wyboru | rekord pola, URL, rewizji i monotonicznych generacji; edycja i nowy wybór unieważniają poprzedni |
-| zagnieżdżenie oznaczeń | ręczny zakres nachodzący na oznaczenie PESEL, e-maila, telefonu, pól pacjenta, hasła lub `[DANE_N]` jest odrzucany |
+| zagnieżdżenie oznaczeń | ręczny zakres nachodzący na oznaczenie PESEL, e-maila, telefonu, pól pacjenta, hasła, sekretu lub `[DANE_N]` jest odrzucany |
 | programowe uruchomienie ikonki przez stronę | zamknięty Shadow DOM i akceptowanie wyłącznie zaufanego zdarzenia użytkownika |
 | usunięcie lub imitacja ikonki przez stronę | ikonka nie jest kontrolką bezpieczeństwa; panel rozszerzenia pozostaje kanoniczną alternatywą |
 | wyciek przez logi | brak logowania payloadów i wykrytych wartości |
@@ -125,7 +125,9 @@ wysłać surowy tekst, dlatego UI nie może sugerować pełnej ochrony.
 ## Zakres obecnych detektorów
 
 - PESEL: 11 cyfr, poprawna zakodowana data i suma kontrolna,
-- e-mail: praktyczny adres z domeną wieloczłonową,
+- e-mail: praktyczny adres z domeną wieloczłonową; rozpoznana etykieta `email=`
+  wyznacza granicę wartości w logu lub parametrze URL, a fragment `hasło@host`
+  po `scheme://user:` nie jest klasyfikowany jako adres,
 - telefon: dziewięć cyfr, opcjonalne `+48`, spacje albo myślniki.
 - nazwa pacjenta: wartość dokładnego pola `patientName`, `patientFirstName` lub
   `patientLastName` w JSON albo cytowanym przypisaniu `klucz=wartość`; bez
@@ -134,12 +136,23 @@ wysłać surowy tekst, dlatego UI nie może sugerować pełnej ochrony.
   przypisaniu `klucz=wartość`,
 - hasło: wartość dokładnego pola `password` w JSON albo przypisaniu
   `klucz=wartość`; samo słowo `password` nie jest wykryciem.
+- sekret techniczny: wartość dokładnego pola `client_secret`, `api_key` lub
+  `apiToken`, wartość po pełnym `Authorization: Bearer` albo hasło pomiędzy
+  użytkownikiem i hostem w `scheme://user:password@host`.
 
 Pola strukturalne są rozpoznawane wyłącznie w ograniczonym formacie i nie
 obsługują dowolnych aliasów, złożonych ucieczek ani sekretów bez jawnej nazwy
-pola. Dla pól pacjenta i hasła panel otrzymuje stały podgląd `•••`, bez inicjałów
-i końcówki wartości. Detektory heurystyczne mogą generować fałszywe alarmy i
-pominięcia. Decyzja zawsze należy do użytkownika.
+pola. Kompletna wartość dokładnego pola `password` lub sekretu technicznego ma
+pierwszeństwo przed zawartym w niej dopasowaniem PESEL-u, e-maila lub telefonu i
+jako jedyna trafia do listy propozycji. Cytowane przypisanie musi mieć zgodne
+domknięcie i nie może zawierać sekwencji z backslashem; błędny zapis nie daje
+częściowego dopasowania bez cudzysłowów. Nagłówek Bearer wymaga dokładnej nazwy
+`Authorization`, a hasło URI — schematu, użytkownika i hosta. Istniejące
+oznaczenie jest rozpoznawane w całości i pomijane. Dla pól pacjenta, haseł i
+sekretów panel otrzymuje stały podgląd `•••`, bez fragmentu wartości. Alias,
+sama nazwa pola, samo słowo `Bearer` i swobodny tekst nie są wykryciem.
+Detektory heurystyczne mogą generować fałszywe alarmy i pominięcia. Decyzja
+zawsze należy do użytkownika.
 
 ## Checklist zmiany granicy
 

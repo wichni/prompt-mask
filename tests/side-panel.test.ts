@@ -136,6 +136,11 @@ describe("side panel", () => {
           kind: "PASSWORD",
           maskedPreview: "•••",
         },
+        {
+          id: "SECRET:28:41",
+          kind: "SECRET",
+          maskedPreview: "•••",
+        },
       ],
     });
 
@@ -144,6 +149,7 @@ describe("side panel", () => {
     expect(container.textContent).toContain("Imię pacjenta");
     expect(container.textContent).toContain("Nazwisko pacjenta");
     expect(container.textContent).toContain("Hasło");
+    expect(container.textContent).toContain("Sekret");
     expect(container.textContent).not.toContain("Żaneta Próba");
     expect(container.textContent).not.toContain("PT-Z19-44");
   });

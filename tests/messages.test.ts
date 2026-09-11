@@ -54,7 +54,7 @@ describe("panel message boundary", () => {
           { id: "SECRET:0:6", kind: "SECRET", maskedPreview: "•••" },
         ],
       }),
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it("rejects an analysis snapshot containing raw text", () => {
@@ -93,7 +93,7 @@ describe("panel message boundary", () => {
     expect(isPanelCommand({ ...command, detectionIds: [] })).toBe(false);
     expect(
       isPanelCommand({ ...command, detectionIds: ["SECRET:7:18"] }),
-    ).toBe(false);
+    ).toBe(true);
     expect(
       isPanelCommand({ ...command, detectionIds: ["PATIENT_ID:18:7"] }),
     ).toBe(false);

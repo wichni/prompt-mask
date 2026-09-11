@@ -13,10 +13,16 @@ export const medicalBaseline: Record<string, EvaluatedDetection[]> = {
     { kind: "EMAIL", start: 50, end: 70 },
   ],
   "SEC-01": [{ kind: "PASSWORD", start: 13, end: 26 }],
-  "SEC-02": [],
-  "SEC-03": [],
-  "SEC-04": [{ kind: "EMAIL", start: 39, end: 62 }],
-  "MIX-01": [{ kind: "PESEL", start: 11, end: 22 }],
+  "SEC-02": [
+    { kind: "SECRET", start: 14, end: 30 },
+    { kind: "SECRET", start: 40, end: 56 },
+  ],
+  "SEC-03": [{ kind: "SECRET", start: 22, end: 39 }],
+  "SEC-04": [{ kind: "SECRET", start: 39, end: 51 }],
+  "MIX-01": [
+    { kind: "PESEL", start: 11, end: 22 },
+    { kind: "SECRET", start: 46, end: 58 },
+  ],
   "MIX-02": [
     { kind: "PATIENT_ID", start: 14, end: 23 },
     { kind: "EMAIL", start: 34, end: 54 },
@@ -24,9 +30,9 @@ export const medicalBaseline: Record<string, EvaluatedDetection[]> = {
   ],
   "MIX-03": [{ kind: "PHONE", start: 34, end: 45 }],
   "MIX-04": [
-    { kind: "EMAIL", start: 2, end: 27 },
+    { kind: "EMAIL", start: 8, end: 27 },
     { kind: "PHONE", start: 34, end: 45 },
-    { kind: "EMAIL", start: 48, end: 73 },
+    { kind: "EMAIL", start: 54, end: 73 },
     { kind: "PHONE", start: 80, end: 91 },
   ],
   "NEG-01": [],
@@ -36,5 +42,5 @@ export const medicalBaseline: Record<string, EvaluatedDetection[]> = {
   "NEG-05": [],
   "NEG-06": [],
   "EDGE-01": [{ kind: "EMAIL", start: 38, end: 62 }],
-  "EDGE-02": [],
+  "EDGE-02": [{ kind: "SECRET", start: 55, end: 68 }],
 };

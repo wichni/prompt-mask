@@ -1,11 +1,7 @@
 import type { DetectionKind } from "../../src/core/detection";
 
 export type MedicalCaseFormat = "DESCRIPTION" | "LOG" | "JSON";
-export type ProtectedCategory =
-  | DetectionKind
-  | "PATIENT_NAME"
-  | "PATIENT_ID"
-  | "SECRET";
+export type ProtectedCategory = DetectionKind;
 
 export interface ProtectedSpan {
   category: ProtectedCategory;
@@ -135,7 +131,6 @@ export const medicalCases: MedicalCase[] = [
       { category: "PASSWORD", subtype: "PASSWORD", start: 13, end: 26, value: "P@ss-demo-7!Q", reason: "Wartość hasła" },
     ],
     mustPreserve: [preserve('"password"', "Nazwa diagnozowanego pola")],
-    knownLimitation: "Obecna wersja nie wykrywa haseł w polach strukturalnych.",
   }),
   defineCase({
     id: "SEC-02",
@@ -147,7 +142,6 @@ export const medicalCases: MedicalCase[] = [
       { category: "SECRET", subtype: "API_KEY", start: 40, end: 56, value: "sk_demo_A1b2C3d4", reason: "Syntetyczny klucz API" },
     ],
     mustPreserve: [preserve("env=test", "Kontekst środowiska testowego")],
-    knownLimitation: "Obecna wersja nie wykrywa sekretów konfiguracji.",
   }),
   defineCase({
     id: "SEC-03",
@@ -158,7 +152,6 @@ export const medicalCases: MedicalCase[] = [
       { category: "SECRET", subtype: "BEARER_TOKEN", start: 22, end: 39, value: "demo.jwt.token-7X", reason: "Wartość tokenu Bearer" },
     ],
     mustPreserve: [preserve("Authorization: Bearer ", "Nazwa i schemat nagłówka")],
-    knownLimitation: "Obecna wersja nie wykrywa tokenów Bearer.",
   }),
   defineCase({
     id: "SEC-04",
@@ -172,7 +165,6 @@ export const medicalCases: MedicalCase[] = [
       preserve("postgresql://tester:", "Schemat i użytkownik potrzebne do diagnozy"),
       preserve("@db.invalid/clinic?ssl=true", "Host, baza i parametr po chronionym haśle"),
     ],
-    knownLimitation: "Obecna wersja nie wykrywa haseł w URI.",
   }),
   defineCase({
     id: "MIX-01",
@@ -184,7 +176,6 @@ export const medicalCases: MedicalCase[] = [
       { category: "SECRET", subtype: "BEARER_TOKEN", start: 46, end: 58, value: "sync-demo-T9", reason: "Token integracji" },
     ],
     mustPreserve: [preserve("status=403", "Wynik wywołania")],
-    knownLimitation: "Obecna wersja wykrywa PESEL, ale nie token.",
   }),
   defineCase({
     id: "MIX-02",
@@ -197,8 +188,6 @@ export const medicalCases: MedicalCase[] = [
       { category: "PASSWORD", subtype: "PASSWORD", start: 68, end: 79, value: "Tmp!Pass-44", reason: "Hasło tymczasowe" },
     ],
     mustPreserve: [preserve("LOGIN_17", "Kod błędu")],
-    knownLimitation:
-      "Automatyczne maskowanie obejmuje patientId i e-mail, ale nie hasło.",
   }),
   defineCase({
     id: "MIX-03",
@@ -295,6 +284,5 @@ export const medicalCases: MedicalCase[] = [
       { category: "SECRET", subtype: "API_TOKEN", start: 55, end: 68, value: "json-demo-K8x", reason: "Wartość tokenu w JSON" },
     ],
     mustPreserve: [preserve('\\"format\\"\\n', "Ucieczki w treści JSON"), preserve("JSON_422", "Kod błędu")],
-    knownLimitation: "Obecna wersja nie wykrywa tokenu w polu strukturalnym.",
   }),
 ];

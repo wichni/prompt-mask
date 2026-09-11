@@ -11,7 +11,9 @@ zaznaczenie.
 2. Content script lokalnie analizuje bieżący tekst.
 3. Panel pokazuje możliwy PESEL, adres e-mail, polski numer telefonu albo
    wartość jawnego pola `patientName`, `patientFirstName`, `patientLastName`,
-   `patientId` lub `password` w JSON i formacie `klucz=wartość`.
+   `patientId`, `password`, `client_secret`, `api_key` lub `apiToken` w JSON i
+   formacie `klucz=wartość`. Rozpoznaje też wartość nagłówka
+   `Authorization: Bearer` i hasło w URI z jawnym `scheme://user:password@host`.
 4. „Maskuj” zastępuje wyłącznie aktualny wykryty zakres oznaczeniem, np.
    `[PESEL_1]`.
 5. „Maskuj wszystkie wykryte (N)” zatwierdza dokładnie aktualną listę i wykonuje
@@ -104,6 +106,18 @@ Swobodne zdanie `Pacjentka Żaneta Próba` nie powinno zostać automatycznie
 zaklasyfikowane jako nazwa pacjenta. Niejednoznaczne `patientName=Jan Testowy`
 bez cudzysłowów również ma pozostać bez automatycznej propozycji. Samo słowo
 `password` bez wartości nie jest wykryciem.
+
+Dla sekretów technicznych użyj syntetycznego tekstu:
+
+```text
+client_secret=demo-client-Z8x!; api_key=sk_demo_A1b2C3d4; Authorization: Bearer demo.jwt.token-7X; postgresql://tester:demo-db-P4ss@db.invalid/clinic
+```
+
+Panel powinien pokazać cztery pozycje „Sekret” wyłącznie z podglądem `•••`.
+Maskowanie zbiorcze ma zachować nazwy pól, schemat nagłówka oraz URI, zmieniając
+tylko cztery wartości na kolejne `[SECRET_n]`; „Cofnij” ma przywrócić dokładny
+tekst. Same nazwy pól, aliasy i słowo `Bearer` bez pełnego kontekstu nie są
+wykryciami.
 
 1. Wpisz do zwykłego pola ChatGPT syntetyczny e-mail, telefon i poprawny PESEL.
 2. Sprawdź biało-niebieską paletę, trzy propozycje, licznik oraz aktywne

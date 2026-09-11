@@ -225,6 +225,7 @@ export const evaluateCorpus = (
       "PATIENT_LAST_NAME",
       "PATIENT_ID",
       "PASSWORD",
+      "SECRET",
     ] as const
   ).forEach((category) =>
     addCounts(supportedCounts, countsByCategory[category]),

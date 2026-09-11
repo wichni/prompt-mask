@@ -150,11 +150,11 @@ describe("medical evaluation", () => {
         precision: 1,
       },
       EMAIL: {
-        truePositive: 5,
-        falseNegative: 2,
-        falsePositive: 3,
-        sensitivity: 5 / 7,
-        precision: 5 / 8,
+        truePositive: 7,
+        falseNegative: 0,
+        falsePositive: 0,
+        sensitivity: 1,
+        precision: 1,
       },
       PHONE: {
         truePositive: 4,
@@ -199,35 +199,35 @@ describe("medical evaluation", () => {
         precision: 1,
       },
       SECRET: {
-        truePositive: 0,
-        falseNegative: 6,
+        truePositive: 6,
+        falseNegative: 0,
         falsePositive: 0,
-        sensitivity: 0,
-        precision: null,
+        sensitivity: 1,
+        precision: 1,
       },
     });
     expect(result.supportedCategories).toEqual({
-      truePositive: 16,
-      falseNegative: 6,
-      falsePositive: 4,
-      sensitivity: 16 / 22,
-      precision: 16 / 20,
+      truePositive: 24,
+      falseNegative: 4,
+      falsePositive: 1,
+      sensitivity: 24 / 28,
+      precision: 24 / 25,
     });
     expect(result.fullScope).toEqual({
-      truePositive: 16,
-      falseNegative: 12,
-      falsePositive: 4,
-      sensitivity: 16 / 28,
-      precision: 16 / 20,
+      truePositive: 24,
+      falseNegative: 4,
+      falsePositive: 1,
+      sensitivity: 24 / 28,
+      precision: 24 / 25,
     });
     expect(result.negativeCasesWithFalsePositive).toBe(1);
     expect(result.negativeCaseCount).toBe(6);
     expect(
       result.cases.filter(({ falsePositive }) => falsePositive > 0).map(({ id }) => id),
-    ).toEqual(["SEC-04", "MIX-04", "NEG-04"]);
+    ).toEqual(["NEG-04"]);
     expect(
       result.cases.find(({ id }) => id === "MIX-04")?.mismatches,
-    ).toHaveLength(2);
+    ).toHaveLength(0);
   });
 });
 
