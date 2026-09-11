@@ -35,8 +35,11 @@ upoważnienie do operacji na Git, publikacji lub rozszerzenia zakresu.
 - Nie dodawaj wywołań do modeli, telemetryki ani innych usług sieciowych bez
   osobno zatwierdzonego etapu i aktualizacji modelu zagrożeń.
 - Nigdy nie loguj treści, wykrytych wartości, map podmian ani danych schowka.
-- Każdy błąd analizy, walidacji, wersji lub integracji ma kończyć się brakiem
-  modyfikacji tekstu. Brak wykryć nie jest błędem analizy.
+- Każdy błąd analizy, walidacji, wersji lub integracji wykryty przed zapisem ma
+  kończyć się brakiem modyfikacji tekstu. Po rozpoczęciu zapisu niepewny wynik
+  oznacza błąd, unieważnienie starego stanu i brak automatycznego rollbacku,
+  który mógłby nadpisać późniejszą zmianę użytkownika lub strony. Brak wykryć
+  nie jest błędem analizy.
 - Modyfikuj wyłącznie bieżący, zgodny wersją zakres po jawnej decyzji
   użytkownika. Nigdy nie klikaj „Wyślij”.
 - UI musi mówić wprost, że natywna strona może odczytać surowy tekst przed

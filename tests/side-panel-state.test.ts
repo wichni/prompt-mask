@@ -200,8 +200,40 @@ describe("side panel state", () => {
     });
     expect(failed.feedback).toEqual({
       tone: "ERROR",
-      message: "Błąd maskowania. Sprawdź tekst i spróbuj ponownie.",
+      message:
+        "Nie udało się potwierdzić maskowania. Sprawdź tekst w polu wiadomości.",
     });
+  });
+
+  it("finishes an in-flight mask when editor failure precedes its result", () => {
+    const pending = beginBulkMask(readyState());
+    const editorFailed = reducePanelEvent(pending, {
+      type: "HOST_STATUS",
+      state: "ERROR",
+      error: "COMPOSER_NOT_FOUND",
+    });
+    const result = reducePanelEvent(editorFailed, {
+      type: "MASK_RESULT",
+      status: "ERROR",
+      sessionId,
+      requestRevision: 1,
+      detectionIds: [email.id, phone.id],
+      error: "MASK_FAILED",
+    });
+    const recovered = reducePanelEvent(
+      reducePanelEvent(result, { type: "HOST_STATUS", state: "READY" }),
+      { ...snapshot(1, [phone]), sessionId: otherSessionId },
+    );
+
+    expect(editorFailed.pendingMask).toBeNull();
+    expect(editorFailed.feedback).toEqual({
+      tone: "ERROR",
+      message:
+        "Nie udało się potwierdzić maskowania. Sprawdź tekst w polu wiadomości.",
+    });
+    expect(result).toBe(editorFailed);
+    expect(recovered.host).toBe("READY");
+    expect(recovered.snapshot?.sessionId).toBe(otherSessionId);
   });
 
   it("clears operation feedback when the active source changes", () => {
@@ -285,6 +317,41 @@ describe("side panel state", () => {
       message: "Tekst zmieniony — cofanie niedostępne.",
       code: "UNDO_INVALIDATED",
     });
+  });
+
+  it("reports an in-flight undo invalidated by an uncertain context", () => {
+    const pendingMask = beginSingleMask(readyState(), email);
+    const rescanned = reducePanelEvent(pendingMask, snapshot(2, [phone]));
+    const masked = reducePanelEvent(rescanned, {
+      type: "MASK_RESULT",
+      status: "SUCCESS",
+      sessionId,
+      requestRevision: 1,
+      detectionIds: [email.id],
+      resultRevision: 2,
+      remainingDetections: 1,
+      undoOperationId: 11,
+    });
+    const pendingUndo = beginUndo(masked);
+    const invalidated = reducePanelEvent(pendingUndo, {
+      type: "UNDO_INVALIDATED",
+      operationId: 11,
+      reason: "CONTEXT_CHANGED",
+    });
+    const result = reducePanelEvent(invalidated, {
+      type: "UNDO_RESULT",
+      status: "ERROR",
+      operationId: 11,
+      error: "UNDO_FAILED",
+    });
+
+    expect(invalidated.pendingUndo).toBeNull();
+    expect(invalidated.feedback).toEqual({
+      tone: "ERROR",
+      message:
+        "Nie udało się potwierdzić cofnięcia. Sprawdź tekst w polu wiadomości.",
+    });
+    expect(result).toBe(invalidated);
   });
 
   it("drops pending work and ignores results from a previous draft session", () => {

@@ -69,6 +69,13 @@ const maskedDataLabels: Record<DetectionSummary["kind"], string> = {
   PHONE: "telefon",
 };
 
+const MASK_CONFIRMATION_FAILED =
+  "Nie udało się potwierdzić maskowania. Sprawdź tekst w polu wiadomości.";
+const MANUAL_MASK_CONFIRMATION_FAILED =
+  "Nie udało się potwierdzić maskowania zaznaczenia. Sprawdź tekst w polu wiadomości.";
+const UNDO_CONFIRMATION_FAILED =
+  "Nie udało się potwierdzić cofnięcia. Sprawdź tekst w polu wiadomości.";
+
 const hostErrorMessage = (event: PanelEvent): string | null => {
   if (event.type !== "HOST_STATUS" || event.state !== "ERROR") return null;
   const messages = {
@@ -91,6 +98,19 @@ const operationFailure = (
   pendingMask: null,
   feedback: { tone, message },
 });
+
+const pendingOperationFailure = (state: PanelState): PanelFeedback | null => {
+  if (state.pendingUndo !== null) {
+    return { tone: "ERROR", message: UNDO_CONFIRMATION_FAILED };
+  }
+  if (state.pendingManualMask !== null) {
+    return { tone: "ERROR", message: MANUAL_MASK_CONFIRMATION_FAILED };
+  }
+  if (state.pendingMask) {
+    return { tone: "ERROR", message: MASK_CONFIRMATION_FAILED };
+  }
+  return state.feedback?.tone === "ERROR" ? state.feedback : null;
+};
 
 const sameIds = (left: string[], right: string[]): boolean =>
   left.length === right.length &&
@@ -121,7 +141,7 @@ export const reducePanelEvent = (
       selectionId: null,
       selectionMessage: INITIAL_PANEL_STATE.selectionMessage,
       undoOperationId: null,
-      feedback: null,
+      feedback: pendingOperationFailure(state),
     };
   }
   if (event.type === "HOST_STATUS") {
@@ -200,13 +220,13 @@ export const reducePanelEvent = (
       pendingUndo: null,
       undoOperationId: null,
       feedback:
-        event.reason === "CONTEXT_CHANGED"
-          ? null
-          : failedInFlight
-            ? {
-                tone: "ERROR",
-                message: "Nie udało się cofnąć maskowania. Sprawdź tekst.",
-              }
+        failedInFlight
+          ? {
+              tone: "ERROR",
+              message: UNDO_CONFIRMATION_FAILED,
+            }
+          : event.reason === "CONTEXT_CHANGED"
+            ? null
             : {
                 tone: "INFO",
                 message: "Tekst zmieniony — cofanie niedostępne.",
@@ -242,7 +262,7 @@ export const reducePanelEvent = (
           "INFO",
           "Tekst się zmienił. Sprawdź aktualne wykrycia.",
         )
-      : operationFailure(state);
+      : operationFailure(state, "ERROR", MASK_CONFIRMATION_FAILED);
   }
   if (
     state.snapshot?.sessionId !== event.sessionId ||
@@ -283,7 +303,7 @@ const reduceManualMaskResult = (
         message:
           event.error === "STALE_SELECTION"
             ? "Zaznacz fragment ponownie — tekst się zmienił."
-            : "Nie udało się zamaskować zaznaczenia. Sprawdź tekst.",
+            : MANUAL_MASK_CONFIRMATION_FAILED,
       },
     };
   }
@@ -298,7 +318,7 @@ const reduceManualMaskResult = (
       selectionMessage: INITIAL_PANEL_STATE.selectionMessage,
       feedback: {
         tone: "ERROR",
-        message: "Nie udało się zamaskować zaznaczenia. Sprawdź tekst.",
+        message: MANUAL_MASK_CONFIRMATION_FAILED,
       },
     };
   }
@@ -330,7 +350,7 @@ const reduceUndoResult = (
       undoOperationId: null,
       feedback: {
         tone: "ERROR",
-        message: "Nie udało się cofnąć maskowania. Sprawdź tekst.",
+        message: UNDO_CONFIRMATION_FAILED,
       },
     };
   }

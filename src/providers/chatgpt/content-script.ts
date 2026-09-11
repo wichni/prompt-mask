@@ -188,7 +188,7 @@ const scanComposer = (): void => {
 const scheduleScan = (): void => {
   if (scheduled || panelPorts.size === 0) return;
   scheduled = true;
-  requestAnimationFrame(scanComposer);
+  requestAnimationFrame(scanComposerSafely);
 };
 
 const handleInput = (event: Event): void => {
@@ -238,18 +238,53 @@ const broadcastMaskError = (
   });
 };
 
-const hasCurrentComposerContext = (): boolean =>
-  composer !== null &&
-  window.location.href === sourceUrl &&
-  findNativeComposer(document) === composer &&
-  readComposerText(composer) === currentText &&
-  readComposerStructure(composer) === currentStructure;
+const hasCurrentComposerContext = (): boolean => {
+  try {
+    return (
+      composer !== null &&
+      window.location.href === sourceUrl &&
+      findNativeComposer(document) === composer &&
+      readComposerText(composer) === currentText &&
+      readComposerStructure(composer) === currentStructure
+    );
+  } catch {
+    return false;
+  }
+};
+
+const resetAfterFailedRecoveryScan = (): void => {
+  draftSession.startNewContext();
+  selectionController.reset();
+  manualMaskShortcut?.hide();
+  discardUndo("CONTEXT_CHANGED");
+  composer = null;
+  sourceUrl = "";
+  currentText = "";
+  currentStructure = null;
+  revision = 0;
+  detections = [];
+  lastSnapshot = null;
+  broadcast({
+    type: "HOST_STATUS",
+    state: "ERROR",
+    error: "COMPOSER_NOT_FOUND",
+  });
+};
+
+const scanComposerSafely = (): void => {
+  try {
+    scanComposer();
+  } catch {
+    resetAfterFailedRecoveryScan();
+  }
+};
 
 const invalidateAfterUncertainWrite = (): void => {
   writeInProgress = false;
   draftSession.markDraftChanged();
+  selectionController.discard();
   discardUndo("CONTEXT_CHANGED");
-  scanComposer();
+  scanComposerSafely();
 };
 
 selectionController = new SelectionController({
@@ -290,7 +325,6 @@ const commitMaskingPlan = (
   );
   if (!restorePoint) return null;
   writeInProgress = true;
-  let expectedStructure: ComposerStructureSignature;
   try {
     if (
       before.sessionId !== draftSession.sessionId ||
@@ -298,49 +332,45 @@ const commitMaskingPlan = (
     ) {
       throw new Error("STALE_MASK");
     }
-    expectedStructure = writeComposerText(
+    const expectedStructure: ComposerStructureSignature = writeComposerText(
       composer,
       plan.text,
       plan.caret,
       plan.edits,
     );
+    if (
+      readComposerText(composer) !== plan.text ||
+      readComposerStructure(composer) !== expectedStructure
+    ) {
+      throw new Error("UNCONFIRMED_MASK");
+    }
+    scanComposer();
+    if (
+      before.sessionId !== draftSession.sessionId ||
+      lastHostStatus.state !== "READY" ||
+      currentText !== plan.text ||
+      currentStructure !== expectedStructure
+    ) {
+      throw new Error("UNCONFIRMED_MASK");
+    }
+    const after = currentUndoDraftState();
+    if (!after) throw new Error("MISSING_UNDO_STATE");
+    const operationId = nextOperationId++;
+    undoRecord = createUndoRecord(
+      operationId,
+      before,
+      after,
+      restorePoint,
+      previousCaret,
+      count,
+    );
+    return operationId;
   } catch {
     invalidateAfterUncertainWrite();
     return null;
+  } finally {
+    writeInProgress = false;
   }
-  if (
-    readComposerText(composer) !== plan.text ||
-    readComposerStructure(composer) !== expectedStructure
-  ) {
-    invalidateAfterUncertainWrite();
-    return null;
-  }
-  scanComposer();
-  if (
-    before.sessionId !== draftSession.sessionId ||
-    lastHostStatus.state !== "READY" ||
-    currentText !== plan.text ||
-    currentStructure !== expectedStructure
-  ) {
-    invalidateAfterUncertainWrite();
-    return null;
-  }
-  const after = currentUndoDraftState();
-  if (!after) {
-    invalidateAfterUncertainWrite();
-    return null;
-  }
-  const operationId = nextOperationId++;
-  undoRecord = createUndoRecord(
-    operationId,
-    before,
-    after,
-    restorePoint,
-    previousCaret,
-    count,
-  );
-  writeInProgress = false;
-  return operationId;
 };
 
 const maskDetections = (message: unknown): void => {
@@ -354,7 +384,7 @@ const maskDetections = (message: unknown): void => {
   if (prepared.status === "INVALID") return;
   selectionController.discard();
   if (prepared.status === "STALE" || !hasCurrentComposerContext()) {
-    scanComposer();
+    scanComposerSafely();
     broadcastMaskError(prepared.command, "STALE_TEXT");
     return;
   }
@@ -364,7 +394,7 @@ const maskDetections = (message: unknown): void => {
   }
 
   if (!hasCurrentComposerContext()) {
-    scanComposer();
+    scanComposerSafely();
     broadcastMaskError(prepared.command, "STALE_TEXT");
     return;
   }
@@ -421,7 +451,7 @@ const maskSelection = (command: ManualMaskCommand): void => {
     !hasCurrentComposerContext()
   ) {
     selectionController.discard();
-    scanComposer();
+    scanComposerSafely();
     broadcastManualMaskError(command, "STALE_SELECTION");
     return;
   }
@@ -486,49 +516,43 @@ const undoMasking = (command: UndoCommand): void => {
   ) {
     if (record?.operationId === command.operationId) {
       markIndependentChange();
-      scanComposer();
+      scanComposerSafely();
     }
     broadcastUndoError(command);
     return;
   }
 
   writeInProgress = true;
-  let expectedStructure: ComposerStructureSignature;
   try {
     if (!matchesUndoDraft(record, current) || !hasCurrentComposerContext()) {
       throw new Error("STALE_UNDO");
     }
-    expectedStructure = restoreComposerText(
+    const expectedStructure: ComposerStructureSignature = restoreComposerText(
       record.composer,
       record.restorePoint,
     );
+    if (
+      readComposerText(record.composer) !== record.previousText ||
+      readComposerStructure(record.composer) !== expectedStructure
+    ) {
+      throw new Error("UNCONFIRMED_UNDO");
+    }
+    scanComposer();
+    if (
+      lastHostStatus.state !== "READY" ||
+      currentText !== record.previousText ||
+      currentStructure !== expectedStructure
+    ) {
+      throw new Error("UNCONFIRMED_UNDO");
+    }
+    undoRecord = null;
   } catch {
     invalidateAfterUncertainWrite();
     broadcastUndoError(command);
     return;
+  } finally {
+    writeInProgress = false;
   }
-
-  if (
-    readComposerText(record.composer) !== record.previousText ||
-    readComposerStructure(record.composer) !== expectedStructure
-  ) {
-    invalidateAfterUncertainWrite();
-    broadcastUndoError(command);
-    return;
-  }
-  scanComposer();
-  if (
-    lastHostStatus.state !== "READY" ||
-    currentText !== record.previousText ||
-    currentStructure !== expectedStructure
-  ) {
-    invalidateAfterUncertainWrite();
-    broadcastUndoError(command);
-    return;
-  }
-
-  undoRecord = null;
-  writeInProgress = false;
   broadcast({
     type: "UNDO_RESULT",
     status: "SUCCESS",
@@ -567,7 +591,7 @@ const activate = (): void => {
     characterData: true,
     subtree: true,
   });
-  scanComposer();
+  scanComposerSafely();
   if (composer) selectionController.capture(composer);
 };
 
@@ -632,7 +656,7 @@ chrome.runtime.onConnect.addListener((port) => {
     discardUndo("CONTEXT_CHANGED");
     lastSnapshot = null;
     broadcast({ type: "HOST_STATUS", state: "SEARCHING" });
-    scanComposer();
+    scanComposerSafely();
   }
   port.onMessage.addListener(handlePanelCommand);
   port.onDisconnect.addListener(() => {

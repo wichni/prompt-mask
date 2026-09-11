@@ -1056,6 +1056,192 @@ describe("native composer analysis", () => {
     });
   });
 
+  it("reports an error, preserves page changes and recovers after an unsupported mask", () => {
+    document.body.innerHTML =
+      '<div id="prompt-textarea" contenteditable="true" role="textbox"><p>Kontakt audit@example.com</p><p>Opis przypadku testowego</p></div>';
+    const editable = document.querySelector<HTMLElement>("#prompt-textarea")!;
+    const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
+    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    const initial = snapshots(panel).at(-1)!;
+    editable.addEventListener(
+      "input",
+      () => {
+        const marker = document.createElement("span");
+        marker.textContent = "[ZNACZNIK_STRONY]";
+        editable.append(marker);
+        editable.append(document.createElement("img"));
+      },
+      { once: true },
+    );
+
+    expect(() =>
+      panel.fireMessage({
+        type: "MASK_DETECTIONS",
+        sessionId: initial.sessionId,
+        revision: initial.revision,
+        detectionIds: [initial.detections[0]!.id],
+      }),
+    ).not.toThrow();
+    expect(maskResults(panel)).toEqual([
+      {
+        type: "MASK_RESULT",
+        status: "ERROR",
+        sessionId: initial.sessionId,
+        requestRevision: initial.revision,
+        detectionIds: [initial.detections[0]!.id],
+        error: "MASK_FAILED",
+      },
+    ]);
+    expect(editable.textContent).toContain("[ZNACZNIK_STRONY]");
+
+    panel.fireMessage({
+      type: "MASK_DETECTIONS",
+      sessionId: initial.sessionId,
+      revision: initial.revision,
+      detectionIds: [initial.detections[0]!.id],
+    });
+    expect(maskResults(panel).at(-1)).toMatchObject({
+      status: "ERROR",
+      sessionId: initial.sessionId,
+      error: "STALE_TEXT",
+    });
+
+    editable.innerHTML =
+      "<p>Kontakt recovery@example.com</p><p>Nowy opis testowy</p>";
+    editable.dispatchEvent(new InputEvent("input", { bubbles: true }));
+    const recovered = snapshots(panel).at(-1)!;
+    expect(recovered.sessionId).not.toBe(initial.sessionId);
+    panel.fireMessage({
+      type: "MASK_DETECTIONS",
+      sessionId: recovered.sessionId,
+      revision: recovered.revision,
+      detectionIds: [recovered.detections[0]!.id],
+    });
+
+    expect(editable.textContent).toContain("Kontakt [EMAIL_1]");
+    expect(maskResults(panel).at(-1)).toMatchObject({ status: "SUCCESS" });
+  });
+
+  it("reports one bulk masking error after the composer becomes unsupported", () => {
+    document.body.innerHTML =
+      '<div id="prompt-textarea" contenteditable="true" role="textbox"><p>Kontakt audit@example.com i 500600700</p><p>Opis przypadku testowego</p></div>';
+    const editable = document.querySelector<HTMLElement>("#prompt-textarea")!;
+    const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
+    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    const initial = snapshots(panel).at(-1)!;
+    editable.addEventListener(
+      "input",
+      () => editable.append(document.createElement("img")),
+      { once: true },
+    );
+
+    expect(() =>
+      panel.fireMessage({
+        type: "MASK_DETECTIONS",
+        sessionId: initial.sessionId,
+        revision: initial.revision,
+        detectionIds: initial.detections.map(({ id }) => id),
+      }),
+    ).not.toThrow();
+
+    expect(maskResults(panel)).toHaveLength(1);
+    expect(maskResults(panel)[0]).toMatchObject({
+      status: "ERROR",
+      detectionIds: initial.detections.map(({ id }) => id),
+      error: "MASK_FAILED",
+    });
+  });
+
+  it("still reports the mask result when the recovery scan itself throws", () => {
+    document.body.innerHTML =
+      '<div id="prompt-textarea" contenteditable="true" role="textbox"><p>Kontakt audit@example.com</p><p>Opis przypadku testowego</p></div>';
+    const editable = document.querySelector<HTMLElement>("#prompt-textarea")!;
+    const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
+    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    const initial = snapshots(panel).at(-1)!;
+    const nativeGetComputedStyle = window.getComputedStyle.bind(window);
+    const getComputedStyle = vi
+      .spyOn(window, "getComputedStyle")
+      .mockImplementation((element, pseudoElement) =>
+        nativeGetComputedStyle(element, pseudoElement),
+      );
+    editable.addEventListener(
+      "input",
+      () => {
+        editable.append(document.createElement("img"));
+        getComputedStyle.mockImplementation(() => {
+          throw new Error("SYNTHETIC_STYLE_FAILURE");
+        });
+      },
+      { once: true },
+    );
+
+    expect(() =>
+      panel.fireMessage({
+        type: "MASK_DETECTIONS",
+        sessionId: initial.sessionId,
+        revision: initial.revision,
+        detectionIds: [initial.detections[0]!.id],
+      }),
+    ).not.toThrow();
+
+    expect(maskResults(panel)).toHaveLength(1);
+    expect(maskResults(panel)[0]).toMatchObject({
+      status: "ERROR",
+      error: "MASK_FAILED",
+    });
+    getComputedStyle.mockRestore();
+  });
+
+  it("cleans up a manual mask after the composer becomes unsupported", () => {
+    document.body.innerHTML =
+      '<div id="prompt-textarea" contenteditable="true" role="textbox"><p>Klient Testowy</p><p>Opis przypadku testowego</p></div>';
+    const editable = document.querySelector<HTMLElement>("#prompt-textarea")!;
+    const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
+    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    const range = document.createRange();
+    range.selectNodeContents(editable.firstElementChild!);
+    const domSelection = window.getSelection()!;
+    domSelection.removeAllRanges();
+    domSelection.addRange(range);
+    editable.dispatchEvent(new PointerEvent("pointerup", { bubbles: true }));
+    const selection = selectionStates(panel).at(-1);
+    if (selection?.state !== "READY") throw new Error("Expected selection");
+    const shortcut = document.querySelector<HTMLElement>(
+      "#prompt-mask-manual-shortcut",
+    )!;
+    editable.addEventListener(
+      "input",
+      () => editable.append(document.createElement("img")),
+      { once: true },
+    );
+
+    expect(() =>
+      panel.fireMessage({
+        type: "MASK_SELECTION",
+        selectionId: selection.selectionId,
+      }),
+    ).not.toThrow();
+    const afterFailure = editable.innerHTML;
+    panel.fireMessage({
+      type: "MASK_SELECTION",
+      selectionId: selection.selectionId,
+    });
+
+    expect(manualMaskResults(panel)[0]).toEqual({
+      type: "MANUAL_MASK_RESULT",
+      status: "ERROR",
+      selectionId: selection.selectionId,
+      error: "MASK_FAILED",
+    });
+    expect(manualMaskResults(panel)[1]).toMatchObject({
+      status: "ERROR",
+      error: "STALE_SELECTION",
+    });
+    expect(editable.innerHTML).toBe(afterFailure);
+    expect(shortcut.style.display).toBe("none");
+  });
+
   it("keeps undo after focus and caret changes without editing", () => {
     const textarea = document.querySelector<HTMLTextAreaElement>("textarea")!;
     textarea.value = "Kontakt anna.test@example.com";
@@ -1166,6 +1352,64 @@ describe("native composer analysis", () => {
 
     expect(textarea.value).toBe("Nowsza edycja użytkownika");
     expect(undoResults(panel).at(-1)).toMatchObject({ status: "ERROR" });
+  });
+
+  it("reports a failed undo and recovers after the composer becomes supported", () => {
+    document.body.innerHTML =
+      '<div id="prompt-textarea" contenteditable="true" role="textbox"><p>Kontakt audit@example.com</p><p>Opis przypadku testowego</p></div>';
+    const editable = document.querySelector<HTMLElement>("#prompt-textarea")!;
+    const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
+    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    const initial = snapshots(panel).at(-1)!;
+    panel.fireMessage({
+      type: "MASK_DETECTIONS",
+      sessionId: initial.sessionId,
+      revision: initial.revision,
+      detectionIds: [initial.detections[0]!.id],
+    });
+    const masked = maskResults(panel).at(-1)!;
+    if (masked.status !== "SUCCESS") throw new Error("Expected mask success");
+    editable.addEventListener(
+      "input",
+      () => editable.append(document.createElement("img")),
+      { once: true },
+    );
+
+    expect(() =>
+      panel.fireMessage({
+        type: "UNDO_MASK",
+        operationId: masked.undoOperationId,
+      }),
+    ).not.toThrow();
+    expect(undoResults(panel)).toEqual([
+      {
+        type: "UNDO_RESULT",
+        status: "ERROR",
+        operationId: masked.undoOperationId,
+        error: "UNDO_FAILED",
+      },
+    ]);
+
+    const failedHtml = editable.innerHTML;
+    panel.fireMessage({
+      type: "UNDO_MASK",
+      operationId: masked.undoOperationId,
+    });
+    expect(editable.innerHTML).toBe(failedHtml);
+    expect(undoResults(panel).at(-1)).toMatchObject({ status: "ERROR" });
+
+    editable.innerHTML =
+      "<p>Kontakt recovery@example.com</p><p>Nowy opis testowy</p>";
+    editable.dispatchEvent(new InputEvent("input", { bubbles: true }));
+    const recovered = snapshots(panel).at(-1)!;
+    panel.fireMessage({
+      type: "MASK_DETECTIONS",
+      sessionId: recovered.sessionId,
+      revision: recovered.revision,
+      detectionIds: [recovered.detections[0]!.id],
+    });
+
+    expect(maskResults(panel).at(-1)).toMatchObject({ status: "SUCCESS" });
   });
 
   it("does not restore undo after the content component disconnects", () => {

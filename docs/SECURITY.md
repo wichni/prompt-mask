@@ -60,7 +60,7 @@ zaufania ani granicą bezpieczeństwa. Pełna kontrolka w panelu pozostaje dost�
 
 ## Reguły modyfikacji
 
-Podmiana nie zachodzi, gdy:
+Przed pierwszym zapisem DOM podmiana nie zachodzi, gdy:
 
 - pole nie zostało znalezione jednoznacznie,
 - kandydat jest ukryty, odłączony, nieedytowalny, wyłączony albo tylko do odczytu,
@@ -75,7 +75,16 @@ Podmiana nie zachodzi, gdy:
   poza bieżące pole albo nachodzi na oznaczenie utworzone przez promptMask,
 - zakresy nakładają się albo nie można przygotować kompletnego planu podmian,
 - tekst przekracza limit 12 000 jednostek UTF-16,
-- wystąpił błąd odczytu albo zapisu DOM.
+- wystąpił błąd odczytu albo przygotowania zapisu DOM.
+
+Po rozpoczęciu zapisu strona może synchronicznie zmienić tekst lub strukturę
+edytora. Błąd zapisu, ponownego odczytu, porównania struktury albo analizy
+potwierdzającej oznacza wtedy wynik niepewny: operacja kończy się błędem,
+`writeInProgress` jest zerowane, a zaznaczenie, rekord cofania i stare decyzje
+są unieważniane. Rozszerzenie nie przywraca automatycznie wcześniejszego tekstu,
+ponieważ mogłoby nadpisać nowszą zmianę użytkownika lub strony. Gotowość wraca
+dopiero po nowej analizie ponownie obsługiwanego edytora; maskowanie ani cofanie
+nie jest ponawiane bez kolejnej jawnej decyzji użytkownika.
 
 Cofnięcie nie zachodzi, gdy rekord nie jest bieżący, tekst nie jest dokładnie
 oczekiwanym wynikiem maskowania, zmieniła się rewizja lub generacja szkicu,
@@ -127,7 +136,8 @@ zawsze należy do użytkownika.
 1. Czy nowy kontekst otrzymuje surowy tekst lub pełną wartość?
 2. Czy komunikaty odrzucają dodatkowe pola i obcego nadawcę?
 3. Czy stara decyzja może zmienić nowszy szkic?
-4. Czy błąd kończy się brakiem modyfikacji?
+4. Czy błąd przed zapisem kończy się bez modyfikacji, a niepewny zapis
+   unieważnia stan bez automatycznego nadpisania tekstu?
 5. Czy logi i storage pozostają bez payloadu?
 6. Czy dodano test pozytywny, negatywny i test zakresu?
 7. Czy zaktualizowano ten dokument oraz `STATUS.md`?

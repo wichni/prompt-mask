@@ -36,6 +36,10 @@ Wersja manifestu: `0.1.0`
   zbiorczej lub ręcznej, dostępny wyłącznie w tym samym, niezmienionym szkicu,
 - ponowna analiza przywróconego tekstu oraz fail-closed przy zmianie treści,
   wysłaniu, zmianie rozmowy, karty, pola lub niepewnym wyniku zapisu,
+- jednoznaczne zakończenie maskowania i cofania po błędzie zapisu, odczytu,
+  kontroli struktury lub analizy potwierdzającej; niepewny zapis unieważnia
+  stare decyzje i cofanie bez automatycznego nadpisania zmian strony, a po
+  powrocie obsługiwanego edytora nowa jawna operacja działa bez przeładowania,
 - rozróżnienie zakończonej analizy bez wykryć od analizy trwającej, błędu i
   braku dostępu do pola,
 - odrzucenie nieaktualnej wersji, zmienionego zakresu i nadmiarowych pól,
@@ -72,7 +76,7 @@ treści. Aktualna funkcja pomaga użytkownikowi zauważyć i zmienić dane przed
 ## Dowody automatyczne
 
 - `npm run typecheck` — zaliczony,
-- `npm test` — zaliczone testy: 114/114,
+- `npm test` — zaliczone testy: 121/121,
 - `npm run build` — zaliczony; manifest nie publikuje już zasobów dodatkowego
   pola, a content script pozostaje samodzielnym bundłem,
 - testy negatywne obejmują błędny PESEL, niejednoznaczny edytor, surowy tekst w
@@ -93,7 +97,12 @@ treści. Aktualna funkcja pomaga użytkownikowi zauważyć i zmienić dane przed
   granicę akapitu, zbiorczego maskowania, strukturalnego cofnięcia, nieznanej
   struktury, zmiany samej struktury szkicu, synchronicznej reakcji strony,
   ukrytego pola, interaktywnego pola w nieinteraktywnej warstwie i dwóch
-  jednocześnie poprawnych kandydatów.
+  jednocześnie poprawnych kandydatów. Regresje F5 potwierdzają pojedyncze,
+  zbiorcze i ręczne maskowanie oraz cofanie przy synchronicznym dodaniu
+  nieobsługiwanego elementu, dokładnie jeden końcowy wynik pierwszej operacji,
+  zachowanie znacznika dodanego przez stronę, odrzucenie starej decyzji,
+  sprzątanie mimo błędu ponownej analizy i odzyskanie działania bez
+  przeładowania rozszerzenia.
 
 ## Dowody interfejsu
 
@@ -115,6 +124,8 @@ interaktywne pole z `pointer-events: auto` wewnątrz warstwy z
 `pointer-events: none`. Po poprawce i ponownym załadowaniu rozszerzenia użytkownik
 potwierdził w Chrome, że zgłoszony brak pola już nie występuje. To potwierdza
 rozpoznanie edytora, ale nie zastępuje pełnego odbioru maskowania i cofania.
+F5 ma dowód automatyczny na atrapie DOM. Ręczny odbiór zwykłego maskowania i
+cofania po tej zmianie nie został wykonany ani w Chrome, ani w Edge.
 
 ## Wymagany odbiór użytkownika
 
