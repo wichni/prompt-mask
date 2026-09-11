@@ -195,6 +195,99 @@ describe("native composer analysis", () => {
     ]);
   });
 
+  it("rejects a delayed decision after replacing the composer", () => {
+    const original = document.querySelector<HTMLTextAreaElement>("textarea")!;
+    original.value = "500600700";
+    const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
+    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    const previous = snapshots(panel).at(-1)!;
+    const delayedCommand = {
+      type: "MASK_DETECTIONS",
+      sessionId: previous.sessionId,
+      revision: previous.revision,
+      detectionIds: previous.detections.map(({ id }) => id),
+    };
+
+    const replacement = document.createElement("textarea");
+    replacement.id = "mobile-composer-prompt";
+    replacement.value = "600700800";
+    original.replaceWith(replacement);
+    replacement.dispatchEvent(new InputEvent("input", { bubbles: true }));
+    const current = snapshots(panel).at(-1)!;
+
+    expect(current.revision).toBe(previous.revision);
+    expect(current.detections.map(({ id }) => id)).toEqual(
+      previous.detections.map(({ id }) => id),
+    );
+    expect(current.sessionId).not.toBe(previous.sessionId);
+
+    panel.fireMessage(delayedCommand);
+
+    expect(replacement.value).toBe("600700800");
+    expect(maskResults(panel).at(-1)).toMatchObject({
+      status: "ERROR",
+      sessionId: previous.sessionId,
+      error: "STALE_TEXT",
+    });
+  });
+
+  it("rejects a delayed decision after the conversation URL changes", () => {
+    const textarea = document.querySelector<HTMLTextAreaElement>("textarea")!;
+    textarea.value = "500600700";
+    const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
+    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    const previous = snapshots(panel).at(-1)!;
+
+    window.history.pushState({}, "", "/c/next-synthetic-conversation");
+    textarea.dispatchEvent(new InputEvent("input", { bubbles: true }));
+    const current = snapshots(panel).at(-1)!;
+    panel.fireMessage({
+      type: "MASK_DETECTIONS",
+      sessionId: previous.sessionId,
+      revision: previous.revision,
+      detectionIds: previous.detections.map(({ id }) => id),
+    });
+
+    expect(current.sessionId).not.toBe(previous.sessionId);
+    expect(textarea.value).toBe("500600700");
+    expect(maskResults(panel).at(-1)).toMatchObject({
+      status: "ERROR",
+      sessionId: previous.sessionId,
+      error: "STALE_TEXT",
+    });
+  });
+
+  it("rejects a decision created before reconnecting the panel", () => {
+    const textarea = document.querySelector<HTMLTextAreaElement>("textarea")!;
+    textarea.value = "500600700";
+    const firstPanel = createPort(
+      `chrome-extension://${runtimeId}/side-panel.html`,
+    );
+    onConnect.listener?.(firstPanel as unknown as chrome.runtime.Port);
+    const previous = snapshots(firstPanel).at(-1)!;
+    firstPanel.fireDisconnect();
+
+    const reconnectedPanel = createPort(
+      `chrome-extension://${runtimeId}/side-panel.html`,
+    );
+    onConnect.listener?.(reconnectedPanel as unknown as chrome.runtime.Port);
+    const current = snapshots(reconnectedPanel).at(-1)!;
+    reconnectedPanel.fireMessage({
+      type: "MASK_DETECTIONS",
+      sessionId: previous.sessionId,
+      revision: previous.revision,
+      detectionIds: previous.detections.map(({ id }) => id),
+    });
+
+    expect(current.sessionId).not.toBe(previous.sessionId);
+    expect(textarea.value).toBe("500600700");
+    expect(maskResults(reconnectedPanel).at(-1)).toMatchObject({
+      status: "ERROR",
+      sessionId: previous.sessionId,
+      error: "STALE_TEXT",
+    });
+  });
+
   it("confirms masking only after rescanning the changed textarea", () => {
     const textarea = document.querySelector<HTMLTextAreaElement>("textarea")!;
     textarea.value = "Kontakt anna.test@example.com lub +48 500 600 700";
@@ -205,6 +298,7 @@ describe("native composer analysis", () => {
 
     panel.fireMessage({
       type: "MASK_DETECTIONS",
+      sessionId: snapshot.sessionId,
       revision: snapshot.revision,
       detectionIds: [email.id],
     });
@@ -215,6 +309,7 @@ describe("native composer analysis", () => {
     expect(maskResults(panel).at(-1)).toEqual({
       type: "MASK_RESULT",
       status: "SUCCESS",
+      sessionId: snapshot.sessionId,
       requestRevision: snapshot.revision,
       detectionIds: [email.id],
       resultRevision: snapshot.revision + 1,
@@ -239,6 +334,7 @@ describe("native composer analysis", () => {
     expect(snapshot.detections).toHaveLength(4);
     panel.fireMessage({
       type: "MASK_DETECTIONS",
+      sessionId: snapshot.sessionId,
       revision: snapshot.revision,
       detectionIds: snapshot.detections.map(({ id }) => id),
     });
@@ -254,6 +350,7 @@ describe("native composer analysis", () => {
     expect(maskResults(panel).at(-1)).toEqual({
       type: "MASK_RESULT",
       status: "SUCCESS",
+      sessionId: snapshot.sessionId,
       requestRevision: snapshot.revision,
       detectionIds: snapshot.detections.map(({ id }) => id),
       resultRevision: snapshot.revision + 1,
@@ -272,6 +369,7 @@ describe("native composer analysis", () => {
     textarea.value = "Nowy tekst z numerem 600700800";
     panel.fireMessage({
       type: "MASK_DETECTIONS",
+      sessionId: snapshot.sessionId,
       revision: snapshot.revision,
       detectionIds: snapshot.detections.map(({ id }) => id),
     });
@@ -283,6 +381,7 @@ describe("native composer analysis", () => {
     expect(maskResults(panel).at(-1)).toEqual({
       type: "MASK_RESULT",
       status: "ERROR",
+      sessionId: snapshot.sessionId,
       requestRevision: snapshot.revision,
       detectionIds: snapshot.detections.map(({ id }) => id),
       error: "STALE_TEXT",
@@ -302,6 +401,7 @@ describe("native composer analysis", () => {
 
     panel.fireMessage({
       type: "MASK_DETECTIONS",
+      sessionId: snapshot.sessionId,
       revision: snapshot.revision,
       detectionIds: partialIds,
     });
@@ -311,6 +411,7 @@ describe("native composer analysis", () => {
     expect(maskResults(panel).at(-1)).toEqual({
       type: "MASK_RESULT",
       status: "ERROR",
+      sessionId: snapshot.sessionId,
       requestRevision: snapshot.revision,
       detectionIds: partialIds,
       error: "STALE_TEXT",
@@ -327,6 +428,7 @@ describe("native composer analysis", () => {
     const snapshot = snapshots(panel).at(-1)!;
     const command = {
       type: "MASK_DETECTIONS",
+      sessionId: snapshot.sessionId,
       revision: snapshot.revision,
       detectionIds: snapshot.detections.map(({ id }) => id),
     };
@@ -354,6 +456,7 @@ describe("native composer analysis", () => {
 
     panel.fireMessage({
       type: "MASK_DETECTIONS",
+      sessionId: snapshot.sessionId,
       revision: snapshot.revision + 1,
       detectionIds: [snapshot.detections[0]!.id],
     });
@@ -362,6 +465,7 @@ describe("native composer analysis", () => {
     expect(maskResults(panel).at(-1)).toEqual({
       type: "MASK_RESULT",
       status: "ERROR",
+      sessionId: snapshot.sessionId,
       requestRevision: snapshot.revision + 1,
       detectionIds: [snapshot.detections[0]!.id],
       error: "STALE_TEXT",
@@ -574,6 +678,7 @@ describe("native composer analysis", () => {
 
     panel.fireMessage({
       type: "MASK_DETECTIONS",
+      sessionId: snapshot.sessionId,
       revision: snapshot.revision,
       detectionIds: [snapshot.detections[0]!.id],
     });
@@ -611,6 +716,7 @@ describe("native composer analysis", () => {
 
     panel.fireMessage({
       type: "MASK_DETECTIONS",
+      sessionId: initial.sessionId,
       revision: initial.revision,
       detectionIds: [email.id],
     });
@@ -643,6 +749,7 @@ describe("native composer analysis", () => {
 
     panel.fireMessage({
       type: "MASK_DETECTIONS",
+      sessionId: initial.sessionId,
       revision: initial.revision,
       detectionIds: initial.detections.map(({ id }) => id),
     });
@@ -665,12 +772,14 @@ describe("native composer analysis", () => {
 
     panel.fireMessage({
       type: "MASK_DETECTIONS",
+      sessionId: initial.sessionId,
       revision: initial.revision,
       detectionIds: [email.id],
     });
     const afterEmail = snapshots(panel).at(-1)!;
     panel.fireMessage({
       type: "MASK_DETECTIONS",
+      sessionId: afterEmail.sessionId,
       revision: afterEmail.revision,
       detectionIds: [afterEmail.detections[0]!.id],
     });
@@ -695,6 +804,7 @@ describe("native composer analysis", () => {
     const initial = snapshots(panel).at(-1)!;
     panel.fireMessage({
       type: "MASK_DETECTIONS",
+      sessionId: initial.sessionId,
       revision: initial.revision,
       detectionIds: [initial.detections[0]!.id],
     });
@@ -729,6 +839,7 @@ describe("native composer analysis", () => {
     const initial = snapshots(panel).at(-1)!;
     panel.fireMessage({
       type: "MASK_DETECTIONS",
+      sessionId: initial.sessionId,
       revision: initial.revision,
       detectionIds: [initial.detections[0]!.id],
     });
@@ -754,6 +865,7 @@ describe("native composer analysis", () => {
     const initial = snapshots(panel).at(-1)!;
     panel.fireMessage({
       type: "MASK_DETECTIONS",
+      sessionId: initial.sessionId,
       revision: initial.revision,
       detectionIds: [initial.detections[0]!.id],
     });
@@ -780,6 +892,7 @@ describe("native composer analysis", () => {
     const initial = snapshots(panel).at(-1)!;
     panel.fireMessage({
       type: "MASK_DETECTIONS",
+      sessionId: initial.sessionId,
       revision: initial.revision,
       detectionIds: [initial.detections[0]!.id],
     });
@@ -810,6 +923,7 @@ describe("native composer analysis", () => {
     const initial = snapshots(panel).at(-1)!;
     panel.fireMessage({
       type: "MASK_DETECTIONS",
+      sessionId: initial.sessionId,
       revision: initial.revision,
       detectionIds: [initial.detections[0]!.id],
     });
@@ -839,6 +953,7 @@ describe("native composer analysis", () => {
     const initial = snapshots(firstPanel).at(-1)!;
     firstPanel.fireMessage({
       type: "MASK_DETECTIONS",
+      sessionId: initial.sessionId,
       revision: initial.revision,
       detectionIds: [initial.detections[0]!.id],
     });

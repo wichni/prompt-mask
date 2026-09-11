@@ -1,6 +1,7 @@
 import type {
   AnalysisSnapshot,
   DetectionSummary,
+  DraftSessionId,
   ManualMaskResult,
   MaskResult,
   PanelEvent,
@@ -12,12 +13,14 @@ export type PendingMask =
       mode: "SINGLE";
       detectionIds: string[];
       kind: DetectionSummary["kind"];
+      sessionId: DraftSessionId;
       revision: number;
     }
   | {
       mode: "ALL";
       count: number;
       detectionIds: string[];
+      sessionId: DraftSessionId;
       revision: number;
     };
 
@@ -98,6 +101,7 @@ const matchesPending = (
   event: MaskResult,
 ): pending is PendingMask =>
   pending !== null &&
+  pending.sessionId === event.sessionId &&
   pending.revision === event.requestRevision &&
   sameIds(pending.detectionIds, event.detectionIds);
 
@@ -142,6 +146,16 @@ export const reducePanelEvent = (
     };
   }
   if (event.type === "ANALYSIS_SNAPSHOT") {
+    const sessionChanged =
+      state.snapshot !== null &&
+      state.snapshot.sessionId !== event.sessionId;
+    if (sessionChanged) {
+      return {
+        ...INITIAL_PANEL_STATE,
+        host: "READY",
+        snapshot: event,
+      };
+    }
     const draftChanged =
       state.snapshot !== null && state.snapshot.revision !== event.revision;
     const undoExpired =
@@ -231,6 +245,7 @@ export const reducePanelEvent = (
       : operationFailure(state);
   }
   if (
+    state.snapshot?.sessionId !== event.sessionId ||
     state.snapshot?.revision !== event.resultRevision ||
     state.snapshot.detections.length !== event.remainingDetections
   ) {
@@ -348,6 +363,7 @@ export const beginSingleMask = (
       mode: "SINGLE",
       detectionIds: [detection.id],
       kind: detection.kind,
+      sessionId: state.snapshot.sessionId,
       revision: state.snapshot.revision,
     },
     feedback: null,
@@ -370,6 +386,7 @@ export const beginBulkMask = (state: PanelState): PanelState => {
       mode: "ALL",
       count: state.snapshot.detections.length,
       detectionIds: state.snapshot.detections.map(({ id }) => id),
+      sessionId: state.snapshot.sessionId,
       revision: state.snapshot.revision,
     },
     feedback: null,

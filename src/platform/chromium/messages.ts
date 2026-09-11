@@ -1,7 +1,9 @@
 import type { DetectionKind } from "../../core/detection";
 
 export const MAX_TEXT_LENGTH = 12_000;
-export const PANEL_CONTENT_PORT = "PROMPT_MASK_PANEL_CONTENT_V7";
+export const PANEL_CONTENT_PORT = "PROMPT_MASK_PANEL_CONTENT_V8";
+
+export type DraftSessionId = string;
 
 export interface DetectionSummary {
   id: string;
@@ -23,6 +25,7 @@ export type HostStatus =
 
 export interface AnalysisSnapshot {
   type: "ANALYSIS_SNAPSHOT";
+  sessionId: DraftSessionId;
   revision: number;
   length: number;
   detections: DetectionSummary[];
@@ -41,6 +44,7 @@ export type MaskResult =
   | {
       type: "MASK_RESULT";
       status: "SUCCESS";
+      sessionId: DraftSessionId;
       requestRevision: number;
       detectionIds: string[];
       resultRevision: number;
@@ -50,6 +54,7 @@ export type MaskResult =
   | {
       type: "MASK_RESULT";
       status: "ERROR";
+      sessionId: DraftSessionId;
       requestRevision: number;
       detectionIds: string[];
       error: "MASK_FAILED" | "STALE_TEXT";
@@ -108,6 +113,7 @@ export type PanelEvent =
 
 export type MaskCommand = {
   type: "MASK_DETECTIONS";
+  sessionId: DraftSessionId;
   revision: number;
   detectionIds: string[];
 };
@@ -140,6 +146,12 @@ const hasExactKeys = (
 
 const isSafeCounter = (value: unknown): value is number =>
   Number.isSafeInteger(value) && Number(value) >= 0;
+
+export const isDraftSessionId = (value: unknown): value is DraftSessionId =>
+  typeof value === "string" &&
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u.test(
+    value,
+  );
 
 const isDetectionKind = (value: unknown): value is DetectionKind =>
   value === "PESEL" || value === "EMAIL" || value === "PHONE";
@@ -191,7 +203,14 @@ export const isPanelEvent = (value: unknown): value is PanelEvent => {
   }
   if (value.type === "ANALYSIS_SNAPSHOT") {
     return (
-      hasExactKeys(value, ["type", "revision", "length", "detections"]) &&
+      hasExactKeys(value, [
+        "type",
+        "sessionId",
+        "revision",
+        "length",
+        "detections",
+      ]) &&
+      isDraftSessionId(value.sessionId) &&
       isSafeCounter(value.revision) &&
       isSafeCounter(value.length) &&
       Number(value.length) <= MAX_TEXT_LENGTH &&
@@ -202,6 +221,7 @@ export const isPanelEvent = (value: unknown): value is PanelEvent => {
   }
   if (value.type === "MASK_RESULT") {
     const hasRequestData =
+      isDraftSessionId(value.sessionId) &&
       isSafeCounter(value.requestRevision) &&
       isDetectionIds(value.detectionIds);
     if (!hasRequestData) return false;
@@ -210,6 +230,7 @@ export const isPanelEvent = (value: unknown): value is PanelEvent => {
         hasExactKeys(value, [
           "type",
           "status",
+          "sessionId",
           "requestRevision",
           "detectionIds",
           "error",
@@ -222,6 +243,7 @@ export const isPanelEvent = (value: unknown): value is PanelEvent => {
       hasExactKeys(value, [
         "type",
         "status",
+        "sessionId",
         "requestRevision",
         "detectionIds",
         "resultRevision",
@@ -306,8 +328,14 @@ export const isPanelEvent = (value: unknown): value is PanelEvent => {
 
 export const isPanelCommand = (value: unknown): value is PanelCommand =>
   isRecord(value) &&
-  ((hasExactKeys(value, ["type", "revision", "detectionIds"]) &&
+  ((hasExactKeys(value, [
+    "type",
+    "sessionId",
+    "revision",
+    "detectionIds",
+  ]) &&
     value.type === "MASK_DETECTIONS" &&
+    isDraftSessionId(value.sessionId) &&
     isSafeCounter(value.revision) &&
     isDetectionIds(value.detectionIds)) ||
     (hasExactKeys(value, ["type", "selectionId"]) &&

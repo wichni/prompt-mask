@@ -32,19 +32,19 @@ import {
 import { SelectionController } from "./selection-controller";
 import { matchesSelectionDraft } from "./selection-record";
 import { ManualMaskShortcut } from "./manual-mask-shortcut";
+import { DraftSession } from "./draft-session";
 
 const panelPorts = new Set<chrome.runtime.Port>();
 let observer: MutationObserver | null = null;
 let scheduled = false;
 let composer: HTMLElement | null = null;
 let sourceUrl = "";
+const draftSession = new DraftSession(() => crypto.randomUUID());
 let currentText = "";
 let revision = 0;
 let detections: SensitiveDetection[] = [];
 let lastHostStatus: HostStatus = { type: "HOST_STATUS", state: "SEARCHING" };
 let lastSnapshot: AnalysisSnapshot | null = null;
-let contextGeneration = 0;
-let changeGeneration = 0;
 let nextOperationId = 1;
 let undoRecord: UndoRecord | null = null;
 let writeInProgress = false;
@@ -83,17 +83,18 @@ const discardUndo = (
 const currentUndoDraftState = (): UndoDraftState | null =>
   composer
     ? {
+        sessionId: draftSession.sessionId,
         composer,
         sourceUrl,
-        contextGeneration,
-        changeGeneration,
+        contextGeneration: draftSession.contextGeneration,
+        changeGeneration: draftSession.changeGeneration,
         revision,
         text: currentText,
       }
     : null;
 
 const markIndependentChange = (): void => {
-  changeGeneration += 1;
+  draftSession.markDraftChanged();
   selectionController.discard();
   discardUndo("DRAFT_CHANGED");
 };
@@ -103,6 +104,7 @@ const detectionId = (detection: SensitiveDetection): string =>
 
 const createSnapshot = (): AnalysisSnapshot => ({
   type: "ANALYSIS_SNAPSHOT",
+  sessionId: draftSession.sessionId,
   revision,
   length: currentText.length,
   detections: detections.map((detection) => ({
@@ -116,7 +118,7 @@ const scanComposer = (): void => {
   scheduled = false;
   const nextComposer = findNativeComposer(document);
   if (!nextComposer) {
-    contextGeneration += 1;
+    if (composer) draftSession.startNewContext();
     selectionController.discard();
     discardUndo("CONTEXT_CHANGED");
     composer = null;
@@ -134,7 +136,7 @@ const scanComposer = (): void => {
     composer !== nextComposer || sourceUrl !== nextSourceUrl;
   if (sourceChanged) {
     const hadSource = composer !== null || sourceUrl !== "";
-    contextGeneration += 1;
+    draftSession.startNewContext();
     selectionController.discard();
     discardUndo("CONTEXT_CHANGED");
     composer = nextComposer;
@@ -161,7 +163,7 @@ const scanComposer = (): void => {
     detections = detectSensitiveData(currentText);
   }
 
-  if (!textChanged && lastHostStatus.state === "READY") return;
+  if (!textChanged && lastHostStatus.state === "READY" && lastSnapshot) return;
   broadcast({ type: "HOST_STATUS", state: "READY" });
   broadcast(createSnapshot());
 };
@@ -182,8 +184,7 @@ const handleInput = (event: Event): void => {
   ) {
     if (!writeInProgress) {
       if (activeComposer !== composer || window.location.href !== sourceUrl) {
-        contextGeneration += 1;
-        changeGeneration += 1;
+        draftSession.startNewContext();
         selectionController.discard();
         discardUndo("CONTEXT_CHANGED");
       } else {
@@ -200,8 +201,7 @@ const handleSubmit = (event: Event): void => {
     event.target instanceof HTMLFormElement &&
     composer.closest("form") === event.target
   ) {
-    contextGeneration += 1;
-    changeGeneration += 1;
+    draftSession.startNewContext();
     selectionController.discard();
     discardUndo("CONTEXT_CHANGED");
   }
@@ -214,6 +214,7 @@ const broadcastMaskError = (
   broadcast({
     type: "MASK_RESULT",
     status: "ERROR",
+    sessionId: command.sessionId,
     requestRevision: command.revision,
     detectionIds: [...command.detectionIds],
     error,
@@ -228,7 +229,7 @@ const hasCurrentComposerContext = (): boolean =>
 
 const invalidateAfterUncertainWrite = (): void => {
   writeInProgress = false;
-  changeGeneration += 1;
+  draftSession.markDraftChanged();
   discardUndo("CONTEXT_CHANGED");
   scanComposer();
 };
@@ -258,6 +259,7 @@ const commitMaskingPlan = (
 ): number | null => {
   if (
     !composer ||
+    before.sessionId !== draftSession.sessionId ||
     plan.text.length > MAX_TEXT_LENGTH ||
     !hasCurrentComposerContext()
   ) {
@@ -265,7 +267,12 @@ const commitMaskingPlan = (
   }
   writeInProgress = true;
   try {
-    if (!hasCurrentComposerContext()) throw new Error("STALE_MASK");
+    if (
+      before.sessionId !== draftSession.sessionId ||
+      !hasCurrentComposerContext()
+    ) {
+      throw new Error("STALE_MASK");
+    }
     writeComposerText(composer, plan.text, plan.caret);
   } catch {
     invalidateAfterUncertainWrite();
@@ -276,7 +283,11 @@ const commitMaskingPlan = (
     return null;
   }
   scanComposer();
-  if (lastHostStatus.state !== "READY" || currentText !== plan.text) {
+  if (
+    before.sessionId !== draftSession.sessionId ||
+    lastHostStatus.state !== "READY" ||
+    currentText !== plan.text
+  ) {
     invalidateAfterUncertainWrite();
     return null;
   }
@@ -296,6 +307,7 @@ const commitMaskingPlan = (
 const maskDetections = (message: unknown): void => {
   const prepared = prepareMaskCommand(
     message,
+    draftSession.sessionId,
     revision,
     currentText,
     detections,
@@ -337,6 +349,7 @@ const maskDetections = (message: unknown): void => {
   broadcast({
     type: "MASK_RESULT",
     status: "SUCCESS",
+    sessionId: prepared.command.sessionId,
     requestRevision: prepared.command.revision,
     detectionIds: [...prepared.command.detectionIds],
     resultRevision: revision,
@@ -536,6 +549,7 @@ const deactivate = (): void => {
   observer = null;
   composer = null;
   sourceUrl = "";
+  draftSession.startNewContext();
   currentText = "";
   revision = 0;
   detections = [];
@@ -562,9 +576,12 @@ chrome.runtime.onConnect.addListener((port) => {
   if (shouldActivate) {
     activate();
   } else {
-    postToPanel(port, lastHostStatus);
-    if (lastSnapshot) postToPanel(port, lastSnapshot);
-    postToPanel(port, selectionController.state);
+    draftSession.startNewContext();
+    selectionController.discard();
+    discardUndo("CONTEXT_CHANGED");
+    lastSnapshot = null;
+    broadcast({ type: "HOST_STATUS", state: "SEARCHING" });
+    scanComposer();
   }
   port.onMessage.addListener(handlePanelCommand);
   port.onDisconnect.addListener(() => {

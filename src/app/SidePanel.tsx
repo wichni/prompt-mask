@@ -67,6 +67,7 @@ export const SidePanel = () => {
     const delivered =
       sessionRef.current?.mask({
         type: "MASK_DETECTIONS",
+        sessionId: snapshot.sessionId,
         revision: snapshot.revision,
         detectionIds,
       }) ?? false;

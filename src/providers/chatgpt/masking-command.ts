@@ -5,6 +5,7 @@ import {
 } from "../../core/masking";
 import {
   isPanelCommand,
+  type DraftSessionId,
   type MaskCommand,
 } from "../../platform/chromium/messages";
 
@@ -23,6 +24,7 @@ const sameIds = (left: string[], right: string[]): boolean =>
 
 export const prepareMaskCommand = (
   message: unknown,
+  sessionId: DraftSessionId,
   revision: number,
   currentText: string,
   detections: SensitiveDetection[],
@@ -32,6 +34,7 @@ export const prepareMaskCommand = (
   }
   const currentIds = detections.map(detectionId);
   if (
+    message.sessionId !== sessionId ||
     message.revision !== revision ||
     (message.detectionIds.length > 1 &&
       !sameIds(message.detectionIds, currentIds))

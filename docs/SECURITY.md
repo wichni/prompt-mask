@@ -28,9 +28,10 @@ otrzyma surowego tekstu”.
 
 Content script nie loguje ani nie przekazuje surowego szkicu. Panel otrzymuje
 tylko długość, wersję, listę `{ id, kind, maskedPreview }`, stan gotowości i
-liczbowy identyfikator zaznaczenia oraz identyfikator i status ostatniej
-operacji. Treść zaznaczenia, oryginał i oczekiwany wynik potrzebne do cofnięcia
-nie opuszczają content scriptu i nie trafiają do trwałego magazynu.
+losowy identyfikator sesji szkicu, liczbowy identyfikator zaznaczenia oraz
+identyfikator i status ostatniej operacji. Treść zaznaczenia, oryginał i
+oczekiwany wynik potrzebne do cofnięcia nie opuszczają content scriptu i nie
+trafiają do trwałego magazynu.
 
 ## Dozwolony przepływ
 
@@ -38,7 +39,7 @@ nie opuszczają content scriptu i nie trafiają do trwałego magazynu.
 natywny edytor ChatGPT
   → lokalne detektory w content scripcie
   → ukryte podglądy w panelu
-  → decyzja użytkownika z listą id i wersją
+  → decyzja użytkownika z listą id, sesją szkicu i wersją
   → walidacja aktualnego tekstu i wszystkich wybranych zakresów
   → jeden zapis kompletnego tekstu z oznaczeniami w natywnym edytorze
   → opcjonalne cofnięcie po ponownej walidacji tego samego, niezmienionego szkicu
@@ -64,7 +65,7 @@ Podmiana nie zachodzi, gdy:
 - pole nie zostało znalezione jednoznacznie,
 - decyzja ma nieznany typ lub dodatkowe pola,
 - nadawca nie jest panelem bieżącego rozszerzenia,
-- wersja decyzji nie odpowiada bieżącemu szkicowi,
+- identyfikator sesji lub wersja decyzji nie odpowiada bieżącemu szkicowi,
 - zbiorcza decyzja nie odpowiada dokładnie aktualnej liście propozycji,
 - bieżący zakres nie zawiera wcześniej wykrytej wartości,
 - ręczne zaznaczenie wygasło, jest puste, zawiera tylko białe znaki, wychodzi
@@ -90,7 +91,8 @@ wysłać surowy tekst, dlatego UI nie może sugerować pełnej ochrony.
 | XSS przez wykrytą wartość | React i operacje tekstowe; brak produkcyjnego `innerHTML` |
 | wyciek przez komunikat | ścisłe typy `unknown`; panel dostaje tylko ukryty podgląd |
 | obcy panel lub komenda | dokładny `sender.id`, URL panelu i allowlista pól |
-| użycie starego zakresu | wersja szkicu i ponowne porównanie wartości zakresu |
+| użycie starej decyzji dla innego szkicu | losowy identyfikator sesji w snapshotach, komendach i wynikach; nowa sesja po zmianie pola, URL rozmowy lub ponownym połączeniu |
+| użycie starego zakresu | sesja i wersja szkicu oraz ponowne porównanie wartości zakresu |
 | błędny selektor | priorytet selektorów i odmowa przy niejednoznaczności |
 | częściowa podmiana zbiorcza | walidacja całego planu przed jednym zapisem DOM |
 | globalna podmiana wartości | zakresy `[start, end)` i składanie tekstu bez globalnego `replace()` |

@@ -5,11 +5,14 @@ import {
   isSupportedChatGptUrl,
 } from "../src/platform/chromium/messages";
 
+const sessionId = "00000000-0000-4000-8000-000000000001";
+
 describe("panel message boundary", () => {
   it("accepts a redacted analysis snapshot", () => {
     expect(
       isPanelEvent({
         type: "ANALYSIS_SNAPSHOT",
+        sessionId,
         revision: 2,
         length: 31,
         detections: [
@@ -23,6 +26,7 @@ describe("panel message boundary", () => {
     expect(
       isPanelEvent({
         type: "ANALYSIS_SNAPSHOT",
+        sessionId,
         revision: 2,
         length: 31,
         detections: [],
@@ -34,6 +38,7 @@ describe("panel message boundary", () => {
   it("accepts only an exact mask command", () => {
     const command = {
       type: "MASK_DETECTIONS",
+      sessionId,
       revision: 2,
       detectionIds: ["PESEL:7:18"],
     };
@@ -41,6 +46,9 @@ describe("panel message boundary", () => {
     expect(isPanelCommand(command)).toBe(true);
     expect(isPanelCommand({ ...command, text: "leak" })).toBe(false);
     expect(isPanelCommand({ ...command, detectionIds: [] })).toBe(false);
+    expect(isPanelCommand({ ...command, sessionId: "reused-counter" })).toBe(
+      false,
+    );
     expect(
       isPanelCommand({
         ...command,
@@ -108,6 +116,7 @@ describe("panel message boundary", () => {
     const result = {
       type: "MASK_RESULT",
       status: "SUCCESS",
+      sessionId,
       requestRevision: 2,
       detectionIds: ["EMAIL:10:31"],
       resultRevision: 3,
@@ -123,6 +132,7 @@ describe("panel message boundary", () => {
       isPanelEvent({
         type: "MASK_RESULT",
         status: "ERROR",
+        sessionId,
         requestRevision: 2,
         detectionIds: ["EMAIL:10:31"],
         error: "STALE_TEXT",

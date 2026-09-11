@@ -2,7 +2,6 @@
 
 Stan na: 11.09.2026
 Wersja manifestu: `0.1.0`
-Gałąź robocza: `main`, zmiany niezatwierdzone
 
 ## Działa obecnie
 
@@ -36,6 +35,10 @@ Gałąź robocza: `main`, zmiany niezatwierdzone
 - rozróżnienie zakończonej analizy bez wykryć od analizy trwającej, błędu i
   braku dostępu do pola,
 - odrzucenie nieaktualnej wersji, zmienionego zakresu i nadmiarowych pól,
+- losowa tożsamość sesji szkicu wiążąca snapshot, decyzję automatycznego
+  maskowania i jej wynik; wymiana pola, zmiana URL rozmowy oraz ponowne
+  połączenie unieważniają wcześniejszą decyzję także wtedy, gdy rewizja i
+  położenia wykryć są takie same,
 - brak automatycznego wysyłania, storage, telemetryki i wywołań sieciowych.
 
 ## Granica prywatności
@@ -57,12 +60,16 @@ treści. Aktualna funkcja pomaga użytkownikowi zauważyć i zmienić dane przed
 - spójna mapa oznaczeń w całej rozmowie i `chrome.storage.session`,
 - detekcja nazwisk, adresów pocztowych, dokumentów i innych kategorii,
 - kopiowanie zatwierdzonego wyniku,
-- pakowanie ZIP i obsługa innych dostawców modeli.
+- pakowanie ZIP i obsługa innych dostawców modeli,
+- adapter `contenteditable` nie zachowuje jeszcze granic akapitów przy odczycie,
+  zapisie i cofnięciu,
+- wybór edytora nie odrzuca jeszcze każdego ukrytego lub nieedytowalnego
+  kandydata o preferowanym identyfikatorze.
 
 ## Dowody automatyczne
 
 - `npm run typecheck` — zaliczony,
-- `npm test` — zaliczone testy: 83/83,
+- `npm test` — zaliczone testy: 87/87,
 - `npm run build` — zaliczony; manifest nie publikuje już zasobów dodatkowego
   pola, a content script pozostaje samodzielnym bundłem,
 - testy negatywne obejmują błędny PESEL, niejednoznaczny edytor, surowy tekst w
@@ -73,7 +80,10 @@ treści. Aktualna funkcja pomaga użytkownikowi zauważyć i zmienić dane przed
   kierunek zaznaczenia, Unicode i nowe linie, wiele węzłów DOM, białe znaki,
   kolizję z oznaczeniem, stare i powtórzone polecenie, niepotwierdzony zapis,
   integrację z cofnięciem i brak surowej treści w komunikatach. Brak odbiorcy
-  portu jest obsłużony bez nieodczytanego `runtime.lastError`. Kontrolka `[•••]`
+  portu jest obsłużony bez nieodczytanego `runtime.lastError`. Testy sesji
+  szkicu odrzucają spóźnioną decyzję po wymianie pola, zmianie URL rozmowy i
+  ponownym połączeniu, również przy ponownie użytej rewizji i identycznych
+  identyfikatorach zakresów. Kontrolka `[•••]`
   ma testy pozycji, dostępnej nazwy, jednokrotnej aktywacji, izolacji zdarzeń,
   odmowy dla syntetycznego kliknięcia i integracji ze stanem panelu.
 
@@ -104,5 +114,6 @@ i ręczną operację, wygaśnięcie po edycji i wysłaniu oraz zmianę rozmowy.
 
 ## Następny kandydat na etap
 
-Spójne oznaczenia powtarzających się danych w jednej rozmowie. To propozycja z
+Adapter edytora: jednoznaczny wybór widocznego, edytowalnego pola oraz
+zachowanie akapitów, `br`, pustych wierszy, zakresów i cofania. To propozycja z
 kolejki, nie zatwierdzony zakres.

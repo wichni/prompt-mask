@@ -1,4 +1,7 @@
+import type { DraftSessionId } from "../../platform/chromium/messages";
+
 export interface UndoDraftState {
+  sessionId: DraftSessionId;
   composer: HTMLElement;
   sourceUrl: string;
   contextGeneration: number;
@@ -9,6 +12,7 @@ export interface UndoDraftState {
 
 export interface UndoRecord {
   operationId: number;
+  sessionId: DraftSessionId;
   composer: HTMLElement;
   sourceUrl: string;
   contextGeneration: number;
@@ -30,6 +34,7 @@ export const createUndoRecord = (
   count: number,
 ): UndoRecord => ({
   operationId,
+  sessionId: before.sessionId,
   composer: before.composer,
   sourceUrl: before.sourceUrl,
   contextGeneration: before.contextGeneration,
@@ -47,6 +52,7 @@ export const matchesUndoDraft = (
   current: UndoDraftState,
 ): boolean =>
   record.composer === current.composer &&
+  record.sessionId === current.sessionId &&
   record.sourceUrl === current.sourceUrl &&
   record.contextGeneration === current.contextGeneration &&
   record.changeGeneration === current.changeGeneration &&

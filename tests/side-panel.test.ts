@@ -25,6 +25,8 @@ vi.mock("../src/app/native-composer-client", () => ({
 
 import { SidePanel } from "../src/app/SidePanel";
 
+const sessionId = "00000000-0000-4000-8000-000000000001";
+
 let container: HTMLDivElement;
 let root: Root;
 
@@ -64,6 +66,7 @@ describe("side panel", () => {
 
     emit({
       type: "ANALYSIS_SNAPSHOT",
+      sessionId,
       revision: 1,
       length: 48,
       detections: [
@@ -104,6 +107,7 @@ describe("side panel", () => {
     emit({ type: "HOST_STATUS", state: "READY" });
     emit({
       type: "ANALYSIS_SNAPSHOT",
+      sessionId,
       revision: 1,
       length: 13,
       detections: [],
@@ -131,6 +135,7 @@ describe("side panel", () => {
     emit({ type: "SELECTION_STATE", state: "NONE" });
     emit({
       type: "ANALYSIS_SNAPSHOT",
+      sessionId,
       revision: 2,
       length: 10,
       detections: [],
@@ -154,6 +159,7 @@ describe("side panel", () => {
     emit({ type: "HOST_STATUS", state: "READY" });
     emit({
       type: "ANALYSIS_SNAPSHOT",
+      sessionId,
       revision: 1,
       length: 13,
       detections: [],
@@ -170,6 +176,7 @@ describe("side panel", () => {
     emit({ type: "SELECTION_STATE", state: "NONE" });
     emit({
       type: "ANALYSIS_SNAPSHOT",
+      sessionId,
       revision: 2,
       length: 8,
       detections: [],
@@ -193,6 +200,7 @@ describe("side panel", () => {
     emit({ type: "HOST_STATUS", state: "READY" });
     emit({
       type: "ANALYSIS_SNAPSHOT",
+      sessionId,
       revision: 1,
       length: 48,
       detections: [
@@ -215,12 +223,14 @@ describe("side panel", () => {
     expect(container.textContent).not.toContain("Zamaskowano");
     expect(composerMock.mask).toHaveBeenCalledWith({
       type: "MASK_DETECTIONS",
+      sessionId,
       revision: 1,
       detectionIds: ["EMAIL:8:29"],
     });
 
     emit({
       type: "ANALYSIS_SNAPSHOT",
+      sessionId,
       revision: 2,
       length: 36,
       detections: [
@@ -236,6 +246,7 @@ describe("side panel", () => {
     emit({
       type: "MASK_RESULT",
       status: "SUCCESS",
+      sessionId,
       requestRevision: 1,
       detectionIds: ["EMAIL:8:29"],
       resultRevision: 2,
@@ -261,6 +272,7 @@ describe("side panel", () => {
     emit({ type: "HOST_STATUS", state: "READY" });
     emit({
       type: "ANALYSIS_SNAPSHOT",
+      sessionId,
       revision: 1,
       length: 12,
       detections: [],
@@ -271,6 +283,7 @@ describe("side panel", () => {
 
     emit({
       type: "ANALYSIS_SNAPSHOT",
+      sessionId,
       revision: 2,
       length: 29,
       detections: [
@@ -297,6 +310,7 @@ describe("side panel", () => {
     emit({ type: "HOST_STATUS", state: "READY" });
     emit({
       type: "ANALYSIS_SNAPSHOT",
+      sessionId,
       revision: 1,
       length: 48,
       detections: [
@@ -323,6 +337,7 @@ describe("side panel", () => {
     expect(composerMock.mask).toHaveBeenCalledOnce();
     expect(composerMock.mask).toHaveBeenCalledWith({
       type: "MASK_DETECTIONS",
+      sessionId,
       revision: 1,
       detectionIds: ["EMAIL:8:29", "PHONE:34:49"],
     });
@@ -334,6 +349,7 @@ describe("side panel", () => {
 
     emit({
       type: "ANALYSIS_SNAPSHOT",
+      sessionId,
       revision: 2,
       length: 24,
       detections: [],
@@ -341,6 +357,7 @@ describe("side panel", () => {
     emit({
       type: "MASK_RESULT",
       status: "SUCCESS",
+      sessionId,
       requestRevision: 1,
       detectionIds: ["EMAIL:8:29", "PHONE:34:49"],
       resultRevision: 2,
@@ -361,6 +378,7 @@ describe("side panel", () => {
     emit({ type: "HOST_STATUS", state: "READY" });
     emit({
       type: "ANALYSIS_SNAPSHOT",
+      sessionId,
       revision: 1,
       length: 29,
       detections: [
@@ -376,6 +394,7 @@ describe("side panel", () => {
     );
     emit({
       type: "ANALYSIS_SNAPSHOT",
+      sessionId,
       revision: 2,
       length: 30,
       detections: [
@@ -389,6 +408,7 @@ describe("side panel", () => {
     emit({
       type: "MASK_RESULT",
       status: "ERROR",
+      sessionId,
       requestRevision: 1,
       detectionIds: ["EMAIL:8:29"],
       error: "STALE_TEXT",
@@ -406,6 +426,7 @@ describe("side panel", () => {
     emit({ type: "HOST_STATUS", state: "READY" });
     emit({
       type: "ANALYSIS_SNAPSHOT",
+      sessionId,
       revision: 1,
       length: 29,
       detections: [
@@ -421,6 +442,7 @@ describe("side panel", () => {
     );
     emit({
       type: "ANALYSIS_SNAPSHOT",
+      sessionId,
       revision: 2,
       length: 17,
       detections: [],
@@ -428,6 +450,7 @@ describe("side panel", () => {
     emit({
       type: "MASK_RESULT",
       status: "SUCCESS",
+      sessionId,
       requestRevision: 1,
       detectionIds: ["EMAIL:8:29"],
       resultRevision: 2,
@@ -456,6 +479,7 @@ describe("side panel", () => {
 
     emit({
       type: "ANALYSIS_SNAPSHOT",
+      sessionId,
       revision: 3,
       length: 29,
       detections: [
@@ -484,6 +508,7 @@ describe("side panel", () => {
     emit({ type: "HOST_STATUS", state: "READY" });
     emit({
       type: "ANALYSIS_SNAPSHOT",
+      sessionId,
       revision: 1,
       length: 29,
       detections: [
@@ -499,6 +524,7 @@ describe("side panel", () => {
     );
     emit({
       type: "ANALYSIS_SNAPSHOT",
+      sessionId,
       revision: 2,
       length: 17,
       detections: [],
@@ -506,6 +532,7 @@ describe("side panel", () => {
     emit({
       type: "MASK_RESULT",
       status: "SUCCESS",
+      sessionId,
       requestRevision: 1,
       detectionIds: ["EMAIL:8:29"],
       resultRevision: 2,
@@ -520,12 +547,14 @@ describe("side panel", () => {
     });
     emit({
       type: "ANALYSIS_SNAPSHOT",
+      sessionId,
       revision: 3,
       length: 18,
       detections: [],
     });
     emit({
       type: "ANALYSIS_SNAPSHOT",
+      sessionId,
       revision: 4,
       length: 19,
       detections: [],

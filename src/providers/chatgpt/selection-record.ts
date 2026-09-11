@@ -1,8 +1,10 @@
 import type { TextRange } from "../../core/masking";
+import type { DraftSessionId } from "../../platform/chromium/messages";
 import type { UndoDraftState } from "./undo-record";
 
 export interface SelectionRecord extends TextRange {
   selectionId: number;
+  sessionId: DraftSessionId;
   composer: HTMLElement;
   sourceUrl: string;
   contextGeneration: number;
@@ -17,6 +19,7 @@ export const createSelectionRecord = (
   range: TextRange,
 ): SelectionRecord => ({
   selectionId,
+  sessionId: draft.sessionId,
   composer: draft.composer,
   sourceUrl: draft.sourceUrl,
   contextGeneration: draft.contextGeneration,
@@ -31,6 +34,7 @@ export const matchesSelectionDraft = (
   draft: UndoDraftState,
 ): boolean =>
   record.composer === draft.composer &&
+  record.sessionId === draft.sessionId &&
   record.sourceUrl === draft.sourceUrl &&
   record.contextGeneration === draft.contextGeneration &&
   record.changeGeneration === draft.changeGeneration &&

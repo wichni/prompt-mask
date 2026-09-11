@@ -13,6 +13,9 @@ import {
   reducePanelEvent,
 } from "../src/app/side-panel-state";
 
+const sessionId = "00000000-0000-4000-8000-000000000001";
+const otherSessionId = "00000000-0000-4000-8000-000000000002";
+
 const email: DetectionSummary = {
   id: "EMAIL:8:29",
   kind: "EMAIL",
@@ -30,6 +33,7 @@ const snapshot = (
   detections: DetectionSummary[],
 ): AnalysisSnapshot => ({
   type: "ANALYSIS_SNAPSHOT",
+  sessionId,
   revision,
   length: 50,
   detections,
@@ -59,6 +63,7 @@ describe("side panel state", () => {
     const confirmed = reducePanelEvent(rescanned, {
       type: "MASK_RESULT",
       status: "SUCCESS",
+      sessionId,
       requestRevision: 1,
       detectionIds: [email.id],
       resultRevision: 2,
@@ -79,6 +84,7 @@ describe("side panel state", () => {
     const confirmed = reducePanelEvent(rescanned, {
       type: "MASK_RESULT",
       status: "SUCCESS",
+      sessionId,
       requestRevision: 1,
       detectionIds: [email.id, phone.id],
       resultRevision: 2,
@@ -173,6 +179,7 @@ describe("side panel state", () => {
     const changed = reducePanelEvent(pending, {
       type: "MASK_RESULT",
       status: "ERROR",
+      sessionId,
       requestRevision: 1,
       detectionIds: [email.id, phone.id],
       error: "STALE_TEXT",
@@ -186,6 +193,7 @@ describe("side panel state", () => {
     const failed = reducePanelEvent(beginBulkMask(readyState()), {
       type: "MASK_RESULT",
       status: "ERROR",
+      sessionId,
       requestRevision: 1,
       detectionIds: [email.id, phone.id],
       error: "MASK_FAILED",
@@ -201,6 +209,7 @@ describe("side panel state", () => {
     const failed = reducePanelEvent(pending, {
       type: "MASK_RESULT",
       status: "ERROR",
+      sessionId,
       requestRevision: 1,
       detectionIds: [email.id],
       error: "MASK_FAILED",
@@ -219,6 +228,7 @@ describe("side panel state", () => {
     const masked = reducePanelEvent(rescanned, {
       type: "MASK_RESULT",
       status: "SUCCESS",
+      sessionId,
       requestRevision: 1,
       detectionIds: [email.id],
       resultRevision: 2,
@@ -255,6 +265,7 @@ describe("side panel state", () => {
     const masked = reducePanelEvent(rescanned, {
       type: "MASK_RESULT",
       status: "SUCCESS",
+      sessionId,
       requestRevision: 1,
       detectionIds: [email.id],
       resultRevision: 2,
@@ -274,5 +285,27 @@ describe("side panel state", () => {
       message: "Tekst zmieniony — cofanie niedostępne.",
       code: "UNDO_INVALIDATED",
     });
+  });
+
+  it("drops pending work and ignores results from a previous draft session", () => {
+    const pending = beginSingleMask(readyState(), email);
+    const nextSession = reducePanelEvent(pending, {
+      ...snapshot(1, [email, phone]),
+      sessionId: otherSessionId,
+    });
+    const staleResult = reducePanelEvent(nextSession, {
+      type: "MASK_RESULT",
+      status: "SUCCESS",
+      sessionId,
+      requestRevision: 1,
+      detectionIds: [email.id],
+      resultRevision: 2,
+      remainingDetections: 1,
+      undoOperationId: 20,
+    });
+
+    expect(nextSession.pendingMask).toBeNull();
+    expect(nextSession.snapshot?.sessionId).toBe(otherSessionId);
+    expect(staleResult).toBe(nextSession);
   });
 });
