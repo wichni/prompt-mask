@@ -1,0 +1,201 @@
+import { describe, expect, it } from "vitest";
+import type {
+  AnalysisSnapshot,
+  DetectionSummary,
+} from "../src/platform/chromium/messages";
+import {
+  beginUndo,
+  beginBulkMask,
+  beginSingleMask,
+  detectionLabels,
+  INITIAL_PANEL_STATE,
+  reducePanelEvent,
+} from "../src/app/side-panel-state";
+
+const email: DetectionSummary = {
+  id: "EMAIL:8:29",
+  kind: "EMAIL",
+  maskedPreview: "a•••@e•••.com",
+};
+
+const phone: DetectionSummary = {
+  id: "PHONE:34:49",
+  kind: "PHONE",
+  maskedPreview: "••• ••• 700",
+};
+
+const snapshot = (
+  revision: number,
+  detections: DetectionSummary[],
+): AnalysisSnapshot => ({
+  type: "ANALYSIS_SNAPSHOT",
+  revision,
+  length: 50,
+  detections,
+});
+
+const readyState = () =>
+  reducePanelEvent(
+    reducePanelEvent(INITIAL_PANEL_STATE, {
+      type: "HOST_STATUS",
+      state: "READY",
+    }),
+    snapshot(1, [email, phone]),
+  );
+
+describe("side panel state", () => {
+  it("uses the detector categories without risk labels", () => {
+    expect(detectionLabels).toEqual({
+      PESEL: "PESEL",
+      EMAIL: "E-mail",
+      PHONE: "Telefon",
+    });
+  });
+
+  it("confirms a single mask without repeating the remaining count", () => {
+    const pending = beginSingleMask(readyState(), email);
+    const rescanned = reducePanelEvent(pending, snapshot(2, [phone]));
+    const confirmed = reducePanelEvent(rescanned, {
+      type: "MASK_RESULT",
+      status: "SUCCESS",
+      requestRevision: 1,
+      detectionIds: [email.id],
+      resultRevision: 2,
+      remainingDetections: 1,
+      undoOperationId: 1,
+    });
+
+    expect(confirmed.pendingMask).toBeNull();
+    expect(confirmed.feedback).toEqual({
+      tone: "SUCCESS",
+      message: "Zamaskowano e-mail.",
+    });
+  });
+
+  it("reports how many fragments a confirmed bulk operation masked", () => {
+    const pending = beginBulkMask(readyState());
+    const rescanned = reducePanelEvent(pending, snapshot(2, []));
+    const confirmed = reducePanelEvent(rescanned, {
+      type: "MASK_RESULT",
+      status: "SUCCESS",
+      requestRevision: 1,
+      detectionIds: [email.id, phone.id],
+      resultRevision: 2,
+      remainingDetections: 0,
+      undoOperationId: 2,
+    });
+
+    expect(confirmed.feedback).toEqual({
+      tone: "SUCCESS",
+      message: "Zamaskowane fragmenty: 2.",
+    });
+  });
+
+  it("distinguishes a changed draft from a masking failure", () => {
+    const pending = beginBulkMask(readyState());
+    const changed = reducePanelEvent(pending, {
+      type: "MASK_RESULT",
+      status: "ERROR",
+      requestRevision: 1,
+      detectionIds: [email.id, phone.id],
+      error: "STALE_TEXT",
+    });
+
+    expect(changed.feedback).toEqual({
+      tone: "INFO",
+      message: "Tekst się zmienił. Sprawdź aktualne wykrycia.",
+    });
+
+    const failed = reducePanelEvent(beginBulkMask(readyState()), {
+      type: "MASK_RESULT",
+      status: "ERROR",
+      requestRevision: 1,
+      detectionIds: [email.id, phone.id],
+      error: "MASK_FAILED",
+    });
+    expect(failed.feedback).toEqual({
+      tone: "ERROR",
+      message: "Błąd maskowania. Sprawdź tekst i spróbuj ponownie.",
+    });
+  });
+
+  it("clears operation feedback when the active source changes", () => {
+    const pending = beginSingleMask(readyState(), email);
+    const failed = reducePanelEvent(pending, {
+      type: "MASK_RESULT",
+      status: "ERROR",
+      requestRevision: 1,
+      detectionIds: [email.id],
+      error: "MASK_FAILED",
+    });
+    const connecting = reducePanelEvent(failed, {
+      type: "HOST_STATUS",
+      state: "SEARCHING",
+    });
+
+    expect(connecting).toEqual(INITIAL_PANEL_STATE);
+  });
+
+  it("confirms undo only for the current operation and updated snapshot", () => {
+    const pendingMask = beginSingleMask(readyState(), email);
+    const rescanned = reducePanelEvent(pendingMask, snapshot(2, [phone]));
+    const masked = reducePanelEvent(rescanned, {
+      type: "MASK_RESULT",
+      status: "SUCCESS",
+      requestRevision: 1,
+      detectionIds: [email.id],
+      resultRevision: 2,
+      remainingDetections: 1,
+      undoOperationId: 9,
+    });
+    const pendingUndo = beginUndo(masked);
+    const staleResponse = reducePanelEvent(pendingUndo, {
+      type: "UNDO_RESULT",
+      status: "SUCCESS",
+      operationId: 8,
+      resultRevision: 3,
+    });
+    const restored = reducePanelEvent(staleResponse, snapshot(3, [email, phone]));
+    const confirmed = reducePanelEvent(restored, {
+      type: "UNDO_RESULT",
+      status: "SUCCESS",
+      operationId: 9,
+      resultRevision: 3,
+    });
+
+    expect(staleResponse).toBe(pendingUndo);
+    expect(confirmed.pendingUndo).toBeNull();
+    expect(confirmed.undoOperationId).toBeNull();
+    expect(confirmed.feedback).toEqual({
+      tone: "SUCCESS",
+      message: "Cofnięto ostatnie maskowanie.",
+    });
+  });
+
+  it("expires undo on a draft change without reviving it later", () => {
+    const pending = beginSingleMask(readyState(), email);
+    const rescanned = reducePanelEvent(pending, snapshot(2, [phone]));
+    const masked = reducePanelEvent(rescanned, {
+      type: "MASK_RESULT",
+      status: "SUCCESS",
+      requestRevision: 1,
+      detectionIds: [email.id],
+      resultRevision: 2,
+      remainingDetections: 1,
+      undoOperationId: 10,
+    });
+    const invalidated = reducePanelEvent(masked, {
+      type: "UNDO_INVALIDATED",
+      operationId: 10,
+      reason: "DRAFT_CHANGED",
+    });
+    const changedAgain = reducePanelEvent(invalidated, snapshot(4, [phone]));
+
+    expect(changedAgain.undoOperationId).toBeNull();
+    expect(changedAgain.feedback).toEqual({
+      tone: "INFO",
+      message: "Tekst zmieniony — cofanie niedostępne.",
+      code: "UNDO_INVALIDATED",
+    });
+  });
+});

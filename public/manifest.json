@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "minimum_chrome_version": "114",
+  "name": "promptMask",
+  "version": "0.1.0",
+  "description": "Lokalnie wykrywa i maskuje dane w tekście wpisywanym w ChatGPT.",
+  "action": {
+    "default_title": "Otwórz promptMask"
+  },
+  "background": {
+    "service_worker": "service-worker.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://chatgpt.com/*"],
+      "js": ["content-script.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "host_permissions": ["https://chatgpt.com/*"],
+  "permissions": ["sidePanel"],
+  "side_panel": {
+    "default_path": "side-panel.html"
+  }
+}
