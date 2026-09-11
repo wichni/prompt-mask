@@ -48,7 +48,7 @@ export const createPlaceholder = (
   text: string,
 ): string => formatPlaceholder(kind, nextPlaceholderNumber(kind, text));
 
-interface PlannedReplacement {
+export interface TextEdit {
   range: TextRange;
   replacement: string;
 }
@@ -56,6 +56,7 @@ interface PlannedReplacement {
 export interface MaskingPlan {
   text: string;
   caret: number;
+  edits: TextEdit[];
 }
 
 const isValidRange = (
@@ -70,7 +71,7 @@ const isValidRange = (
 
 const applyReplacements = (
   text: string,
-  replacements: PlannedReplacement[],
+  replacements: TextEdit[],
 ): MaskingPlan | null => {
   const sorted = [...replacements].sort(
     (left, right) => left.range.start - right.range.start,
@@ -93,7 +94,14 @@ const applyReplacements = (
     sourceCursor = range.end;
     caret = maskedText.length;
   });
-  return { text: maskedText + text.slice(sourceCursor), caret };
+  return {
+    text: maskedText + text.slice(sourceCursor),
+    caret,
+    edits: sorted.map(({ range, replacement }) => ({
+      range: { start: range.start, end: range.end },
+      replacement,
+    })),
+  };
 };
 
 export const createMaskingPlan = (

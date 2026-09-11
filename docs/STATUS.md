@@ -22,6 +22,10 @@ Wersja manifestu: `0.1.0`
   dla poprawnego zaznaczenia i korzystający z tej samej ręcznej operacji,
 - obsługa wyboru myszą i klawiaturą, powtórzeń, wielu węzłów oraz zakresów UTF-16
   z polskimi znakami, emoji i nowymi liniami,
+- wspólna reprezentacja obsługiwanych `contenteditable`: akapity `p`/`div`,
+  `br`, puste wiersze i jawnie dozwolone elementy liniowe,
+- zakresowa modyfikacja DOM zachowująca akapity, wiersze i formatowanie poza
+  zmienianym zakresem oraz strukturalne cofnięcie ostatniej operacji,
 - fail-closed dla pustego wyboru, białych znaków, zakresu poza polem i zakresu
   nachodzącego na oznaczenie wygenerowane przez promptMask,
 - podmiana wyłącznie aktualnego zakresu na `[PESEL_n]`, `[EMAIL_n]` lub
@@ -39,6 +43,9 @@ Wersja manifestu: `0.1.0`
   maskowania i jej wynik; wymiana pola, zmiana URL rozmowy oraz ponowne
   połączenie unieważniają wcześniejszą decyzję także wtedy, gdy rewizja i
   położenia wykryć są takie same,
+- wybór dokładnie jednego kandydata, który jest podłączony do aktywnego
+  dokumentu, widoczny, edytowalny, niewyłączony i ma obsługiwaną strukturę;
+  brak pewności kończy się odmową modyfikacji,
 - brak automatycznego wysyłania, storage, telemetryki i wywołań sieciowych.
 
 ## Granica prywatności
@@ -60,16 +67,12 @@ treści. Aktualna funkcja pomaga użytkownikowi zauważyć i zmienić dane przed
 - spójna mapa oznaczeń w całej rozmowie i `chrome.storage.session`,
 - detekcja nazwisk, adresów pocztowych, dokumentów i innych kategorii,
 - kopiowanie zatwierdzonego wyniku,
-- pakowanie ZIP i obsługa innych dostawców modeli,
-- adapter `contenteditable` nie zachowuje jeszcze granic akapitów przy odczycie,
-  zapisie i cofnięciu,
-- wybór edytora nie odrzuca jeszcze każdego ukrytego lub nieedytowalnego
-  kandydata o preferowanym identyfikatorze.
+- pakowanie ZIP i obsługa innych dostawców modeli.
 
 ## Dowody automatyczne
 
 - `npm run typecheck` — zaliczony,
-- `npm test` — zaliczone testy: 87/87,
+- `npm test` — zaliczone testy: 114/114,
 - `npm run build` — zaliczony; manifest nie publikuje już zasobów dodatkowego
   pola, a content script pozostaje samodzielnym bundłem,
 - testy negatywne obejmują błędny PESEL, niejednoznaczny edytor, surowy tekst w
@@ -85,7 +88,12 @@ treści. Aktualna funkcja pomaga użytkownikowi zauważyć i zmienić dane przed
   ponownym połączeniu, również przy ponownie użytej rewizji i identycznych
   identyfikatorach zakresów. Kontrolka `[•••]`
   ma testy pozycji, dostępnej nazwy, jednokrotnej aktywacji, izolacji zdarzeń,
-  odmowy dla syntetycznego kliknięcia i integracji ze stanem panelu.
+  odmowy dla syntetycznego kliknięcia i integracji ze stanem panelu. Adapter DOM
+  ma regresje dla dwóch akapitów, `br`, pustego wiersza, zaznaczenia przez
+  granicę akapitu, zbiorczego maskowania, strukturalnego cofnięcia, nieznanej
+  struktury, zmiany samej struktury szkicu, synchronicznej reakcji strony,
+  ukrytego pola, interaktywnego pola w nieinteraktywnej warstwie i dwóch
+  jednocześnie poprawnych kandydatów.
 
 ## Dowody interfejsu
 
@@ -95,11 +103,18 @@ screeny jako dowód wykrycia e-maila i telefonu oraz podmiany e-maila, ale tych
 plików nie ma w bieżącym materiale do niezależnej weryfikacji. Nie stanowią więc
 dowodu PESEL-u, podmiany telefonu, całej bieżącej zmiany UI ani działania w Edge.
 Aktualny selektor publicznej strony to `textarea#mobile-composer-prompt`;
-bieżąca wersja wymaga ponownego odbioru. Ręczne zaznaczenie, przejście fokusu do
-panelu, `[DANE_N]` i cofnięcie nie zostały jeszcze odebrane na prawdziwej stronie.
+pozostała część bieżącej wersji wymaga pełnego odbioru. Ręczne zaznaczenie,
+przejście fokusu do panelu, `[DANE_N]` i cofnięcie nie zostały jeszcze odebrane
+na prawdziwej stronie.
 Zrzut użytkownika z Chrome potwierdza widoczny panel i stan „Zaznaczenie gotowe
 do maskowania”, ale nie potwierdza wykonanej podmiany, cofnięcia ani nowej
 kontrolki `[•••]`.
+Zrzut z 11.09.2026 wykonany po pierwszej wersji poprawek F2/F3 pokazał
+`COMPOSER_NOT_FOUND` mimo widocznego pola. Automatyczna regresja obejmuje teraz
+interaktywne pole z `pointer-events: auto` wewnątrz warstwy z
+`pointer-events: none`. Po poprawce i ponownym załadowaniu rozszerzenia użytkownik
+potwierdził w Chrome, że zgłoszony brak pola już nie występuje. To potwierdza
+rozpoznanie edytora, ale nie zastępuje pełnego odbioru maskowania i cofania.
 
 ## Wymagany odbiór użytkownika
 
@@ -114,6 +129,5 @@ i ręczną operację, wygaśnięcie po edycji i wysłaniu oraz zmianę rozmowy.
 
 ## Następny kandydat na etap
 
-Adapter edytora: jednoznaczny wybór widocznego, edytowalnego pola oraz
-zachowanie akapitów, `br`, pustych wierszy, zakresów i cofania. To propozycja z
-kolejki, nie zatwierdzony zakres.
+Automatyczne kontrole repozytorium uruchamiające typecheck, testy i build. To
+propozycja z kolejki, nie zatwierdzony zakres.

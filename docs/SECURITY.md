@@ -41,7 +41,7 @@ natywny edytor ChatGPT
   → ukryte podglądy w panelu
   → decyzja użytkownika z listą id, sesją szkicu i wersją
   → walidacja aktualnego tekstu i wszystkich wybranych zakresów
-  → jeden zapis kompletnego tekstu z oznaczeniami w natywnym edytorze
+  → jedna operacja adaptera: natywny zapis textarea albo zakresowe zmiany DOM
   → opcjonalne cofnięcie po ponownej walidacji tego samego, niezmienionego szkicu
   → opcjonalne ręczne wysłanie przez użytkownika
 ```
@@ -63,6 +63,9 @@ zaufania ani granicą bezpieczeństwa. Pełna kontrolka w panelu pozostaje dost�
 Podmiana nie zachodzi, gdy:
 
 - pole nie zostało znalezione jednoznacznie,
+- kandydat jest ukryty, odłączony, nieedytowalny, wyłączony albo tylko do odczytu,
+- struktura `contenteditable` wykracza poza obsługiwane akapity `p`/`div`, `br`
+  i jawnie dozwolone elementy liniowe,
 - decyzja ma nieznany typ lub dodatkowe pola,
 - nadawca nie jest panelem bieżącego rozszerzenia,
 - identyfikator sesji lub wersja decyzji nie odpowiada bieżącemu szkicowi,
@@ -88,12 +91,13 @@ wysłać surowy tekst, dlatego UI nie może sugerować pełnej ochrony.
 
 | Zagrożenie | Kontrolka |
 | --- | --- |
-| XSS przez wykrytą wartość | React i operacje tekstowe; brak produkcyjnego `innerHTML` |
+| XSS przez wykrytą wartość | React i operacje na węzłach tekstowych; `innerHTML` jest wyłącznie odczytywany jako lokalna sygnatura struktury, nigdy przypisywany ani wykonywany |
 | wyciek przez komunikat | ścisłe typy `unknown`; panel dostaje tylko ukryty podgląd |
 | obcy panel lub komenda | dokładny `sender.id`, URL panelu i allowlista pól |
 | użycie starej decyzji dla innego szkicu | losowy identyfikator sesji w snapshotach, komendach i wynikach; nowa sesja po zmianie pola, URL rozmowy lub ponownym połączeniu |
 | użycie starego zakresu | sesja i wersja szkicu oraz ponowne porównanie wartości zakresu |
-| błędny selektor | priorytet selektorów i odmowa przy niejednoznaczności |
+| błędny selektor | walidacja widoczności, edytowalności, dokumentu i struktury każdego kandydata oraz odmowa przy więcej niż jednym poprawnym polu |
+| spłaszczenie akapitów poza zakresem | wspólna reprezentacja UTF-16 z jawnymi granicami bloków i `br`; zakresowe zmiany DOM zamiast `textContent` |
 | częściowa podmiana zbiorcza | walidacja całego planu przed jednym zapisem DOM |
 | globalna podmiana wartości | zakresy `[start, end)` i składanie tekstu bez globalnego `replace()` |
 | wyciek ręcznie wskazanej wartości | treść wyboru zostaje w content scripcie; panel dostaje tylko stan i liczbowy identyfikator |
@@ -107,7 +111,7 @@ wysłać surowy tekst, dlatego UI nie może sugerować pełnej ochrony.
 | automatyczne wysłanie | rozszerzenie nie uruchamia przycisku ani skrótu wysyłania |
 | cofnięcie w innym lub zmienionym szkicu | referencja pola, URL, rewizja i monotoniczne generacje kontekstu i zmian |
 | nadpisanie późniejszej edycji przez cofnięcie | końcowa synchroniczna kontrola bezpośrednio przed zapisem i weryfikacja wyniku bez automatycznego rollbacku |
-| wyciek oryginału z rekordu cofania | rekord tylko w pamięci content scriptu; panel otrzymuje wyłącznie identyfikator operacji i status |
+| wyciek oryginału z rekordu cofania | tekst i lokalna kopia struktury DOM pozostają wyłącznie w pamięci content scriptu; panel otrzymuje tylko identyfikator operacji i status |
 
 ## Zakres obecnych detektorów
 

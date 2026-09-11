@@ -547,6 +547,136 @@ describe("native composer analysis", () => {
     expect(undoResults(panel).at(-1)).toMatchObject({ status: "SUCCESS" });
   });
 
+  it("preserves paragraph structure while manually masking and undoing", () => {
+    document.body.innerHTML =
+      '<div id="prompt-textarea" contenteditable="true" role="textbox"><p>Jan Testowy</p><p>Opis przypadku</p></div>';
+    const editable = document.querySelector<HTMLElement>("#prompt-textarea")!;
+    const originalHtml = editable.innerHTML;
+    const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
+    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    const range = document.createRange();
+    range.selectNodeContents(editable.firstElementChild!);
+    const domSelection = window.getSelection()!;
+    domSelection.removeAllRanges();
+    domSelection.addRange(range);
+    editable.firstElementChild!.dispatchEvent(
+      new PointerEvent("pointerup", { bubbles: true }),
+    );
+    const selection = selectionStates(panel).at(-1);
+    if (selection?.state !== "READY") throw new Error("Expected selection");
+
+    panel.fireMessage({
+      type: "MASK_SELECTION",
+      selectionId: selection.selectionId,
+    });
+
+    expect(editable.querySelectorAll("p")).toHaveLength(2);
+    expect(editable.firstElementChild?.textContent).toBe("[DANE_1]");
+    expect(editable.lastElementChild?.textContent).toBe("Opis przypadku");
+    const result = manualMaskResults(panel).at(-1)!;
+    if (result.status !== "SUCCESS") throw new Error("Expected manual success");
+
+    panel.fireMessage({
+      type: "UNDO_MASK",
+      operationId: result.undoOperationId,
+    });
+
+    expect(editable.innerHTML).toBe(originalHtml);
+    expect(undoResults(panel).at(-1)).toMatchObject({ status: "SUCCESS" });
+  });
+
+  it("masks across a paragraph boundary and restores every boundary on undo", () => {
+    document.body.innerHTML =
+      '<div id="prompt-textarea" contenteditable="true" role="textbox"><p>Jan Testowy</p><p>Opis przypadku</p><p>Dalej</p></div>';
+    const editable = document.querySelector<HTMLElement>("#prompt-textarea")!;
+    const originalHtml = editable.innerHTML;
+    const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
+    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    const range = document.createRange();
+    range.setStart(editable.children[0]!.firstChild!, 4);
+    range.setEnd(editable.children[1]!.firstChild!, 4);
+    const domSelection = window.getSelection()!;
+    domSelection.removeAllRanges();
+    domSelection.addRange(range);
+    editable.dispatchEvent(new PointerEvent("pointerup", { bubbles: true }));
+    const selection = selectionStates(panel).at(-1);
+    if (selection?.state !== "READY") throw new Error("Expected selection");
+
+    panel.fireMessage({
+      type: "MASK_SELECTION",
+      selectionId: selection.selectionId,
+    });
+
+    expect(editable.innerHTML).toBe(
+      "<p>Jan [DANE_1] przypadku</p><p>Dalej</p>",
+    );
+    const result = manualMaskResults(panel).at(-1)!;
+    if (result.status !== "SUCCESS") throw new Error("Expected manual success");
+    panel.fireMessage({
+      type: "UNDO_MASK",
+      operationId: result.undoOperationId,
+    });
+
+    expect(editable.innerHTML).toBe(originalHtml);
+    expect(undoResults(panel).at(-1)).toMatchObject({ status: "SUCCESS" });
+  });
+
+  it("preserves paragraph structure for a bulk mask and undo", () => {
+    document.body.innerHTML =
+      '<div id="prompt-textarea" contenteditable="true" role="textbox"><p>Numer 500600700</p><p>Drugi 600700800</p></div>';
+    const editable = document.querySelector<HTMLElement>("#prompt-textarea")!;
+    const originalHtml = editable.innerHTML;
+    const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
+    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    const snapshot = snapshots(panel).at(-1)!;
+
+    panel.fireMessage({
+      type: "MASK_DETECTIONS",
+      sessionId: snapshot.sessionId,
+      revision: snapshot.revision,
+      detectionIds: snapshot.detections.map(({ id }) => id),
+    });
+
+    expect(editable.querySelectorAll("p")).toHaveLength(2);
+    expect(editable.children[0]?.textContent).toBe("Numer [PHONE_1]");
+    expect(editable.children[1]?.textContent).toBe("Drugi [PHONE_2]");
+    const result = maskResults(panel).at(-1)!;
+    if (result.status !== "SUCCESS") throw new Error("Expected mask success");
+
+    panel.fireMessage({
+      type: "UNDO_MASK",
+      operationId: result.undoOperationId,
+    });
+
+    expect(editable.innerHTML).toBe(originalHtml);
+    expect(undoResults(panel).at(-1)).toMatchObject({ status: "SUCCESS" });
+  });
+
+  it("masks the only visible editable candidate and leaves a hidden match unchanged", () => {
+    document.body.innerHTML = [
+      '<div id="mobile-composer-prompt" contenteditable="true" hidden><p>500600700</p></div>',
+      '<form><textarea id="actual-editor">600700800</textarea></form>',
+    ].join("");
+    const hidden = document.querySelector<HTMLElement>(
+      "#mobile-composer-prompt",
+    )!;
+    const actual = document.querySelector<HTMLTextAreaElement>("#actual-editor")!;
+    const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
+    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    const snapshot = snapshots(panel).at(-1)!;
+
+    panel.fireMessage({
+      type: "MASK_DETECTIONS",
+      sessionId: snapshot.sessionId,
+      revision: snapshot.revision,
+      detectionIds: snapshot.detections.map(({ id }) => id),
+    });
+
+    expect(hidden.textContent).toBe("500600700");
+    expect(actual.value).toBe("[PHONE_1]");
+    expect(maskResults(panel).at(-1)).toMatchObject({ status: "SUCCESS" });
+  });
+
   it("does not revive a selection after editing back to identical text", () => {
     const textarea = document.querySelector<HTMLTextAreaElement>("textarea")!;
     const original = "Klient Testowy czeka";
@@ -567,6 +697,40 @@ describe("native composer analysis", () => {
     });
 
     expect(textarea.value).toBe(original);
+    expect(manualMaskResults(panel).at(-1)).toEqual({
+      type: "MANUAL_MASK_RESULT",
+      status: "ERROR",
+      selectionId: selection.selectionId,
+      error: "STALE_SELECTION",
+    });
+  });
+
+  it("rejects a selection after a structure-only DOM change", () => {
+    document.body.innerHTML =
+      '<div id="prompt-textarea" contenteditable="true" role="textbox"><p>Jan Testowy</p><p>Opis</p></div>';
+    const editable = document.querySelector<HTMLElement>("#prompt-textarea")!;
+    const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
+    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    const range = document.createRange();
+    range.selectNodeContents(editable.firstElementChild!);
+    const domSelection = window.getSelection()!;
+    domSelection.removeAllRanges();
+    domSelection.addRange(range);
+    editable.firstElementChild!.dispatchEvent(
+      new PointerEvent("pointerup", { bubbles: true }),
+    );
+    const selection = selectionStates(panel).at(-1);
+    if (selection?.state !== "READY") throw new Error("Expected selection");
+
+    editable.firstElementChild!.innerHTML = "<strong>Jan Testowy</strong>";
+    panel.fireMessage({
+      type: "MASK_SELECTION",
+      selectionId: selection.selectionId,
+    });
+
+    expect(editable.innerHTML).toBe(
+      "<p><strong>Jan Testowy</strong></p><p>Opis</p>",
+    );
     expect(manualMaskResults(panel).at(-1)).toEqual({
       type: "MANUAL_MASK_RESULT",
       status: "ERROR",
@@ -829,6 +993,67 @@ describe("native composer analysis", () => {
       },
     ]);
     expect(undoResults(panel).at(-1)).toMatchObject({ status: "ERROR" });
+  });
+
+  it("does not undo over a structure-only DOM change", () => {
+    document.body.innerHTML =
+      '<div id="prompt-textarea" contenteditable="true" role="textbox"><p>Kontakt anna.test@example.com</p><p>Opis</p></div>';
+    const editable = document.querySelector<HTMLElement>("#prompt-textarea")!;
+    const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
+    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    const initial = snapshots(panel).at(-1)!;
+    panel.fireMessage({
+      type: "MASK_DETECTIONS",
+      sessionId: initial.sessionId,
+      revision: initial.revision,
+      detectionIds: [initial.detections[0]!.id],
+    });
+    const result = maskResults(panel).at(-1)!;
+    if (result.status !== "SUCCESS") throw new Error("Expected mask success");
+
+    editable.firstElementChild!.innerHTML =
+      "Kontakt <strong>[EMAIL_1]</strong>";
+    panel.fireMessage({
+      type: "UNDO_MASK",
+      operationId: result.undoOperationId,
+    });
+
+    expect(editable.innerHTML).toBe(
+      "<p>Kontakt <strong>[EMAIL_1]</strong></p><p>Opis</p>",
+    );
+    expect(undoResults(panel).at(-1)).toMatchObject({ status: "ERROR" });
+  });
+
+  it("does not confirm a write after a synchronous structure-only reaction", () => {
+    document.body.innerHTML =
+      '<div id="prompt-textarea" contenteditable="true" role="textbox"><p>Kontakt anna.test@example.com</p><p>Opis</p></div>';
+    const editable = document.querySelector<HTMLElement>("#prompt-textarea")!;
+    const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
+    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    const initial = snapshots(panel).at(-1)!;
+    editable.addEventListener(
+      "input",
+      () => {
+        editable.firstElementChild!.innerHTML =
+          "Kontakt <strong>[EMAIL_1]</strong>";
+      },
+      { once: true },
+    );
+
+    panel.fireMessage({
+      type: "MASK_DETECTIONS",
+      sessionId: initial.sessionId,
+      revision: initial.revision,
+      detectionIds: [initial.detections[0]!.id],
+    });
+
+    expect(editable.innerHTML).toBe(
+      "<p>Kontakt <strong>[EMAIL_1]</strong></p><p>Opis</p>",
+    );
+    expect(maskResults(panel).at(-1)).toMatchObject({
+      status: "ERROR",
+      error: "MASK_FAILED",
+    });
   });
 
   it("keeps undo after focus and caret changes without editing", () => {

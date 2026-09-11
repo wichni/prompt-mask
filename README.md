@@ -108,16 +108,19 @@ Używaj wyłącznie danych utworzonych na potrzeby testu.
 13. Sprawdź ręczne zaznaczenie myszą i klawiaturą w obu kierunkach, także dla
     kilku wierszy, polskich znaków i emoji. Tekst poza zakresem ma pozostać bez
     zmian, a przejście fokusu do panelu nie może zgubić wyboru.
-14. Sprawdź wygasanie ręcznego wyboru po ustawieniu kursora, zaznaczeniu tekstu
+14. W szkicu z trzema wierszami zaznacz i zamaskuj tylko pierwszy wiersz.
+    Pozostałe granice wierszy nie mogą zniknąć; „Cofnij” ma odtworzyć dokładny
+    układ sprzed podmiany.
+15. Sprawdź wygasanie ręcznego wyboru po ustawieniu kursora, zaznaczeniu tekstu
     poza polem, edycji z powrotem do identycznej treści, innym maskowaniu,
     cofnięciu, wysłaniu, zmianie rozmowy, karty i pola.
-15. Zaznacz część `[DANE_1]` i sprawdź odmowę. Osobny tekst w nawiasach, np.
+16. Zaznacz część `[DANE_1]` i sprawdź odmowę. Osobny tekst w nawiasach, np.
     `[JSON]`, nie może zostać uznany za oznaczenie promptMask.
-16. Sprawdź, że `[•••]` pojawia się nad prawą krawędzią edytora tylko dla
+17. Sprawdź, że `[•••]` pojawia się nad prawą krawędzią edytora tylko dla
     poprawnego zaznaczenia, nie zasłania tekstu, działa myszą i klawiaturą oraz
     znika po użyciu albo unieważnieniu wyboru. Panel powinien pokazać ten sam
     sukces i „Cofnij”.
-17. Powtórz odbiór osobno w drugiej przeglądarce.
+18. Powtórz odbiór osobno w drugiej przeglądarce.
 
 Testy automatyczne używają atrapy DOM. Rzeczywisty odbiór trzeba wykonać osobno
 w Chrome i Edge.

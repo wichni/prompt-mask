@@ -54,6 +54,20 @@ describe("masking helpers", () => {
     expect(createMaskingPlan(text, detectSensitiveData(text))).toEqual({
       text: expected,
       caret: expected.length - 1,
+      edits: [
+        {
+          range: { start: 24, end: 45 },
+          replacement: "[EMAIL_3]",
+        },
+        {
+          range: { start: 48, end: 63 },
+          replacement: "[PHONE_1]",
+        },
+        {
+          range: { start: 66, end: 77 },
+          replacement: "[PESEL_1]",
+        },
+      ],
     });
   });
 
@@ -89,6 +103,12 @@ describe("masking helpers", () => {
       plan: {
         text: "🙂 Jan Testowy i [DANE_3] oraz [DANE_4]",
         caret: "🙂 Jan Testowy i [DANE_3] oraz [DANE_4]".length,
+        edits: [
+          {
+            range: { start, end: start + "Jan Testowy".length },
+            replacement: "[DANE_4]",
+          },
+        ],
       },
     });
   });

@@ -17,9 +17,13 @@ import {
   type UndoCommand,
 } from "../../platform/chromium/messages";
 import {
+  captureComposerRestorePoint,
   findNativeComposer,
   readComposerCaret,
+  readComposerStructure,
   readComposerText,
+  restoreComposerText,
+  type ComposerStructureSignature,
   writeComposerText,
 } from "./native-composer";
 import { prepareMaskCommand } from "./masking-command";
@@ -41,6 +45,7 @@ let composer: HTMLElement | null = null;
 let sourceUrl = "";
 const draftSession = new DraftSession(() => crypto.randomUUID());
 let currentText = "";
+let currentStructure: string | null = null;
 let revision = 0;
 let detections: SensitiveDetection[] = [];
 let lastHostStatus: HostStatus = { type: "HOST_STATUS", state: "SEARCHING" };
@@ -90,6 +95,7 @@ const currentUndoDraftState = (): UndoDraftState | null =>
         changeGeneration: draftSession.changeGeneration,
         revision,
         text: currentText,
+        structure: currentStructure,
       }
     : null;
 
@@ -142,12 +148,14 @@ const scanComposer = (): void => {
     composer = nextComposer;
     sourceUrl = nextSourceUrl;
     currentText = "";
+    currentStructure = null;
     revision = 0;
     detections = [];
     if (hadSource) broadcast({ type: "HOST_STATUS", state: "SEARCHING" });
   }
 
   const nextText = readComposerText(nextComposer);
+  const nextStructure = readComposerStructure(nextComposer);
   if (nextText.length > MAX_TEXT_LENGTH) {
     if (!writeInProgress && nextText !== currentText) markIndependentChange();
     lastSnapshot = null;
@@ -156,14 +164,23 @@ const scanComposer = (): void => {
   }
 
   const textChanged = nextText !== currentText;
-  if (textChanged) {
+  const structureChanged = nextStructure !== currentStructure;
+  if (textChanged || structureChanged) {
     if (!writeInProgress) markIndependentChange();
     currentText = nextText;
+    currentStructure = nextStructure;
     revision += 1;
     detections = detectSensitiveData(currentText);
   }
 
-  if (!textChanged && lastHostStatus.state === "READY" && lastSnapshot) return;
+  if (
+    !textChanged &&
+    !structureChanged &&
+    lastHostStatus.state === "READY" &&
+    lastSnapshot
+  ) {
+    return;
+  }
   broadcast({ type: "HOST_STATUS", state: "READY" });
   broadcast(createSnapshot());
 };
@@ -225,7 +242,8 @@ const hasCurrentComposerContext = (): boolean =>
   composer !== null &&
   window.location.href === sourceUrl &&
   findNativeComposer(document) === composer &&
-  readComposerText(composer) === currentText;
+  readComposerText(composer) === currentText &&
+  readComposerStructure(composer) === currentStructure;
 
 const invalidateAfterUncertainWrite = (): void => {
   writeInProgress = false;
@@ -265,7 +283,14 @@ const commitMaskingPlan = (
   ) {
     return null;
   }
+  const restorePoint = captureComposerRestorePoint(
+    composer,
+    before.text,
+    previousCaret,
+  );
+  if (!restorePoint) return null;
   writeInProgress = true;
+  let expectedStructure: ComposerStructureSignature;
   try {
     if (
       before.sessionId !== draftSession.sessionId ||
@@ -273,12 +298,20 @@ const commitMaskingPlan = (
     ) {
       throw new Error("STALE_MASK");
     }
-    writeComposerText(composer, plan.text, plan.caret);
+    expectedStructure = writeComposerText(
+      composer,
+      plan.text,
+      plan.caret,
+      plan.edits,
+    );
   } catch {
     invalidateAfterUncertainWrite();
     return null;
   }
-  if (readComposerText(composer) !== plan.text) {
+  if (
+    readComposerText(composer) !== plan.text ||
+    readComposerStructure(composer) !== expectedStructure
+  ) {
     invalidateAfterUncertainWrite();
     return null;
   }
@@ -286,8 +319,14 @@ const commitMaskingPlan = (
   if (
     before.sessionId !== draftSession.sessionId ||
     lastHostStatus.state !== "READY" ||
-    currentText !== plan.text
+    currentText !== plan.text ||
+    currentStructure !== expectedStructure
   ) {
+    invalidateAfterUncertainWrite();
+    return null;
+  }
+  const after = currentUndoDraftState();
+  if (!after) {
     invalidateAfterUncertainWrite();
     return null;
   }
@@ -295,8 +334,8 @@ const commitMaskingPlan = (
   undoRecord = createUndoRecord(
     operationId,
     before,
-    revision,
-    plan.text,
+    after,
+    restorePoint,
     previousCaret,
     count,
   );
@@ -454,24 +493,35 @@ const undoMasking = (command: UndoCommand): void => {
   }
 
   writeInProgress = true;
+  let expectedStructure: ComposerStructureSignature;
   try {
     if (!matchesUndoDraft(record, current) || !hasCurrentComposerContext()) {
       throw new Error("STALE_UNDO");
     }
-    writeComposerText(record.composer, record.previousText, record.previousCaret);
+    expectedStructure = restoreComposerText(
+      record.composer,
+      record.restorePoint,
+    );
   } catch {
     invalidateAfterUncertainWrite();
     broadcastUndoError(command);
     return;
   }
 
-  if (readComposerText(record.composer) !== record.previousText) {
+  if (
+    readComposerText(record.composer) !== record.previousText ||
+    readComposerStructure(record.composer) !== expectedStructure
+  ) {
     invalidateAfterUncertainWrite();
     broadcastUndoError(command);
     return;
   }
   scanComposer();
-  if (lastHostStatus.state !== "READY" || currentText !== record.previousText) {
+  if (
+    lastHostStatus.state !== "READY" ||
+    currentText !== record.previousText ||
+    currentStructure !== expectedStructure
+  ) {
     invalidateAfterUncertainWrite();
     broadcastUndoError(command);
     return;
@@ -551,6 +601,7 @@ const deactivate = (): void => {
   sourceUrl = "";
   draftSession.startNewContext();
   currentText = "";
+  currentStructure = null;
   revision = 0;
   detections = [];
   lastHostStatus = { type: "HOST_STATUS", state: "SEARCHING" };

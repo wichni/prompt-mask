@@ -10,6 +10,7 @@ export interface SelectionRecord extends TextRange {
   contextGeneration: number;
   changeGeneration: number;
   revision: number;
+  structure: UndoDraftState["structure"];
   selectedText: string;
 }
 
@@ -25,6 +26,7 @@ export const createSelectionRecord = (
   contextGeneration: draft.contextGeneration,
   changeGeneration: draft.changeGeneration,
   revision: draft.revision,
+  structure: draft.structure,
   selectedText: draft.text.slice(range.start, range.end),
   ...range,
 });
@@ -39,4 +41,5 @@ export const matchesSelectionDraft = (
   record.contextGeneration === draft.contextGeneration &&
   record.changeGeneration === draft.changeGeneration &&
   record.revision === draft.revision &&
+  record.structure === draft.structure &&
   record.selectedText === draft.text.slice(record.start, record.end);
