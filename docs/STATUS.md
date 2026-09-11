@@ -138,6 +138,16 @@ oznaczenia, wszystkie warunki wygaśnięcia oraz pozycję, fokus i zachowanie
 kontrolki `[•••]`. Dla cofania trzeba dodatkowo potwierdzić pojedynczą, zbiorczą
 i ręczną operację, wygaśnięcie po edycji i wysłaniu oraz zmianę rozmowy.
 
+## Dokumentacja projektu
+
+`AGENTS.md` i `DEVELOPMENT.md` wymagają aktualizacji właściwej dokumentacji w
+tym samym zadaniu co zmieniane zachowanie oraz oszczędnego wczytywania kontekstu
+przez `INDEX.md`. `PROJECT.md` oddziela bieżące detektory od kandydatów dla
+materiałów programistów i testerów systemów medycznych. Kanoniczne opisy
+instalacji i granicy danych pozostają odpowiednio w `README.md` i `SECURITY.md`.
+Kontrola lokalnych odsyłaczy w siedmiu plikach dokumentacji nie wykazała
+uszkodzonych celów.
+
 ## Następny kandydat na etap
 
 Automatyczne kontrole repozytorium uruchamiające typecheck, testy i build. To

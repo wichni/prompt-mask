@@ -101,6 +101,10 @@ jako ręcznego odbioru Chrome lub Edge.
 
 - Aktualizuj `docs/STATUS.md` po każdym zakończonym etapie.
 - Aktualizuj dokument opisujący zmienioną granicę w tym samym etapie co kod.
+- Przed zakończeniem każdego zadania porównaj zmienione zachowanie z właściwymi
+  dokumentami. Brak wymaganej aktualizacji oznacza, że zadanie nie jest
+  ukończone. Proces i zasady oszczędnego wczytywania kontekstu opisuje
+  `docs/DEVELOPMENT.md`.
 - Nie kopiuj tych samych wymagań do wielu plików; linkuj do dokumentu
   kanonicznego.
 - Nie dodawaj danych klienta, sekretów, tokenów, cookies ani prywatnych

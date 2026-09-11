@@ -5,11 +5,16 @@ Ten indeks służy do wczytywania tylko potrzebnego kontekstu.
 | Potrzeba | Przeczytaj |
 | --- | --- |
 | Aktualny stan, dowody i blokery | [`STATUS.md`](STATUS.md) |
-| Cel, zakres i architektura | [`PROJECT.md`](PROJECT.md) |
+| Cel, kierunek produktu i granice modułów | [`PROJECT.md`](PROJECT.md) |
 | Dane, zaufanie i zagrożenia | [`SECURITY.md`](SECURITY.md) |
-| Implementacja, testy i etapy | [`DEVELOPMENT.md`](DEVELOPMENT.md) |
+| Implementacja, testy, etapy i praca z kontekstem | [`DEVELOPMENT.md`](DEVELOPMENT.md) |
 | Instalacja i użycie | [`../README.md`](../README.md) |
 | Reguły pracy agenta | [`../AGENTS.md`](../AGENTS.md) |
+
+Mapa odpowiedzialności katalogów znajduje się w
+[`PROJECT.md`](PROJECT.md#warstwy), a dobór kontroli do rodzaju zmiany w
+[`DEVELOPMENT.md`](DEVELOPMENT.md#testowanie). Nie powielaj tych map w nowych
+dokumentach.
 
 ## Zasada aktualizacji
 

@@ -16,6 +16,31 @@ Każdy etap zawiera:
 6. aktualizację `STATUS.md` i dokumentu obszaru,
 7. raport Git oraz zatrzymanie przed następnym etapem.
 
+## Oszczędne wczytywanie kontekstu
+
+1. Zacznij od aktualnego `AGENTS.md`, zwięzłego `STATUS.md` i mapy w `INDEX.md`.
+   Nie wczytuj ponownie niezmienionych dokumentów, które są już w kontekście
+   bieżącego zadania.
+2. Następnie otwórz dokument obszaru oraz potrzebny kod i testy. Najpierw
+   wyszukuj ścieżki, symbole i konkretne fragmenty przez `rg`; poszerzaj zakres
+   tylko wtedy, gdy wymaga tego zależność lub ryzyko.
+3. Po zmianie HEAD porównaj stan z ostatnią zweryfikowaną bazą. Historyczne
+   briefy, pełne logi i pozostałe moduły otwieraj tylko dla konkretnej brakującej
+   decyzji lub dowodu.
+4. `STATUS.md` utrzymuj jako opis teraźniejszości. Zastępuj nieaktualne
+   podsumowania zamiast dokładać kolejne pełne raporty. Nie usuwaj jedynego
+   uzasadnienia ważnej decyzji, zanim nie ma ono trwałego miejsca kanonicznego.
+5. W dokumentacji i raporcie podawaj wynik kontroli oraz istotny błąd, bez
+   kopiowania pełnych udanych logów. Nie ograniczaj wymaganych testów
+   bezpieczeństwa lub poprawności w celu oszczędzania kontekstu.
+6. Linkuj do kanonicznej reguły zamiast kopiować ją między dokumentami,
+   briefami i komentarzami. Nowy dokument twórz dopiero dla odrębnego tematu i
+   od razu dodaj go do `INDEX.md`.
+
+Zwięzłość nie może usuwać warunków bezpieczeństwa ani ograniczeń produktu.
+Dokumentacja i przykłady używają wyłącznie danych syntetycznych; nie są
+magazynem szkiców, danych pacjentów ani sekretów.
+
 ## Polecenia
 
 ```bash
@@ -84,3 +109,21 @@ Przed raportem sprawdź:
 - czy pliki mieszczą się w przybliżonym limicie 200 linii,
 - czy dokumentacja odróżnia stan gotowy od planowanego,
 - czy Git nie zawiera artefaktów, sekretów ani cudzych zmian.
+
+## Zakończenie zadania i dokumentacja
+
+Przed raportem porównaj zmienione zachowanie z dokumentem właściwego obszaru.
+Kod i wymagana aktualizacja dokumentacji należą do tego samego zestawu zmian;
+brak takiej aktualizacji oznacza nieukończone zadanie. Nie zmieniaj wszystkich
+plików tylko z powodu daty. Jeśli dokument pozostaje zgodny, odnotuj to krótko
+w raporcie.
+
+Odpowiedzialności dokumentów są rozdzielone przez `INDEX.md`: `STATUS.md`
+opisuje bieżący stan i dowody, `PROJECT.md` cel i kierunek, `SECURITY.md` granicę
+danych, ten dokument sposób pracy, a `README.md` instalację, użycie i odbiór.
+Usuwaj sprzeczne informacje o stanie bieżącym, zachowując istotne uzasadnienia
+decyzji. Po zmianach sprawdź odsyłacze i zgodność z kodem; nie dodawaj testów
+sprawdzających literalne brzmienie Markdown.
+
+Raport wiąż z badaną rewizją. Dla niezatwierdzonych zmian użyj opisu „stan
+roboczy na bazie `<SHA>`”, wskaż zmienione dokumenty i niewykonaną weryfikację.

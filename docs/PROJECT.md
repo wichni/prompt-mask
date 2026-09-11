@@ -7,6 +7,11 @@ pokazywać możliwe dane wrażliwe i pozwalać użytkownikowi świadomie je zast
 Narzędzie ogranicza ryzyko przypadkowego wysłania, ale nie gwarantuje pełnej
 anonimizacji ani braku wcześniejszego odczytu tekstu przez stronę.
 
+Pierwszymi odbiorcami są programiści i testerzy systemów medycznych pracujący z
+opisami błędów, logami i JSON-em. Narzędzie ma pomagać zauważać dane pacjentów
+oraz rozpoznawalne sekrety techniczne, nie usuwając kontekstu potrzebnego do
+zrozumienia problemu.
+
 Pierwszym dostawcą jest ChatGPT w przeglądarkach Chrome i Edge. Architektura ma
 umożliwiać późniejsze adaptery innych modeli bez przenoszenia detektorów do
 warstwy DOM lub platformy.
@@ -24,6 +29,22 @@ warstwy DOM lub platformy.
 
 To zakres docelowy, a nie lista funkcji obecnie gotowych. Aktualny stan jest
 zawsze opisany w `STATUS.md`.
+
+## Kierunek rozwoju detekcji
+
+Obecnie działają detektory PESEL-u, praktycznych adresów e-mail i polskich
+numerów telefonu oraz ręczne maskowanie wskazanego fragmentu. Ich rzeczywisty
+zakres i dowody są kanonicznie opisane w `STATUS.md`.
+
+Kandydatami do kolejnych, osobno zatwierdzanych etapów są rozpoznawalne pola
+identyfikujące pacjenta oraz sekrety techniczne, takie jak tokeny, nagłówki
+`Authorization` i hasła występujące w jednoznacznych strukturach logów lub
+JSON. Dowolnego hasła w swobodnym zdaniu nie należy przedstawiać jako możliwego
+do niezawodnego wykrycia. Najpierw potrzebny jest syntetyczny zestaw przypadków,
+który pokaże zarówno wykrycia, jak i pominięcia oraz fałszywe alarmy.
+
+Ten kierunek nie oznacza, że wymienione detektory, pilotaż lub pakiet
+instalacyjny są już zaimplementowane.
 
 ## Poza pierwszym prototypem
 
@@ -68,9 +89,14 @@ rejestracji i testów, bez zmiany adaptera DOM.
 
 ## Model stanu
 
-- `draftRevision` zmienia się przy każdej zmianie tekstu.
-- Decyzja panelu wskazuje wersję i identyfikator zakresu.
-- Podmiana jest możliwa tylko wtedy, gdy wersja i wartość zakresu nadal pasują.
+- Losowy `sessionId` identyfikuje bieżący kontekst szkicu i zmienia się po
+  wymianie pola, zmianie URL rozmowy lub ponownym połączeniu content scriptu.
+- `revision` zmienia się po zmianie tekstu albo obsługiwanej struktury szkicu.
+- Decyzja panelu wskazuje sesję, rewizję i identyfikatory wykrytych zakresów.
+- Ręczne zaznaczenie i cofanie są dodatkowo związane z elementem, URL-em oraz
+  monotonicznymi generacjami kontekstu i zmian.
+- Podmiana jest możliwa tylko wtedy, gdy te warunki oraz bieżąca wartość zakresu
+  nadal pasują. Szczegóły kontroli opisuje `SECURITY.md`.
 - Brak wykryć, błąd analizy i wynik bez wybranych podmian są trzema różnymi
   stanami.
 
@@ -81,6 +107,9 @@ rejestracji i testów, bez zmiany adaptera DOM.
 - Content script jest osobnym, samodzielnym bundłem bez importów runtime.
 - Surowy szkic znajduje się w natywnym DOM i jest lokalnie odczytywany przez
   content script. Nie jest przekazywany do panelu ani service workera.
+- Obecna wersja nie używa storage. Ewentualne przyszłe użycie wymaga osobnego
+  etapu i nie oznacza zgody na zapisywanie oryginalnych wartości; granicę danych
+  definiuje `SECURITY.md`.
 - DOM otrzymuje tekst przez bezpieczne API tekstowe, nigdy przez `innerHTML`.
 - Integracja odmawia modyfikacji zamiast zgadywać selektor albo używać starego
   zakresu.
