@@ -119,6 +119,18 @@ tylko cztery wartości na kolejne `[SECRET_n]`; „Cofnij” ma przywrócić dok
 tekst. Same nazwy pól, aliasy i słowo `Bearer` bez pełnego kontekstu nie są
 wykryciami.
 
+Dla granic MED-005 sprawdź też osobno dwa syntetyczne wejścia:
+
+```text
+curl -H "Authorization: Bearer demo.jwt.token-7X" https://example.invalid
+email=qa=demo@example.com status=422
+```
+
+Po maskowaniu mają pozostać odpowiednio zamykający cudzysłów i URL oraz dokładna
+etykieta `email=` i `status=422`. Ponowna analiza nie może proponować
+`[SECRET_1]`, a „Cofnij” ma odtworzyć każde wejście dokładnie. Następnie wklej
+oba w osobnych wierszach i sprawdź tę samą składnię po „Maskuj wszystkie”.
+
 1. Wpisz do zwykłego pola ChatGPT syntetyczny e-mail, telefon i poprawny PESEL.
 2. Sprawdź biało-niebieską paletę, trzy propozycje, licznik oraz aktywne
    „Maskuj wszystkie wykryte (3)”.

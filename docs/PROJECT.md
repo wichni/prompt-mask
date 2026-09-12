@@ -49,10 +49,13 @@ obsługiwane w wąskim zakresie MED-002, a MED-003 dodaje dokładne pola imienia
 nazwiska i hasła. MED-004 domyka pierwszeństwo pełnej wartości hasła oraz
 bezpieczne granice ograniczonych przypisań. Osobny zatwierdzony etap domknął
 granice detektora e-mail dla przypisań w logach i danych uwierzytelniających URI.
-Obecny etap domyka kontekstowe sekrety techniczne mierzone przez korpus.
-Kolejnym kandydatem są nazwy pacjentów poza jawnymi polami, co wymaga osobnego
-korpusu negatywnego. Dowolnego hasła, sekretu lub nazwiska w swobodnym zdaniu nie
-należy przedstawiać jako możliwego do niezawodnego wykrycia.
+MED-005 domyka granice cytowanego Bearer i adresu po `email=`, gdy część lokalna
+zawiera kolejny `=`. Po odbiorze Chrome i Edge następnym kandydatem jest wąskie
+jawne pole PESEL dla wartości niespełniającej walidacji daty lub sumy kontrolnej;
+nie oznacza to osłabienia heurystyki wszystkich 11-cyfrowych ciągów. Nazwy
+pacjentów poza jawnymi polami nadal wymagają osobnego korpusu negatywnego.
+Dowolnego hasła, sekretu lub nazwiska w swobodnym zdaniu nie należy przedstawiać
+jako możliwego do niezawodnego wykrycia.
 
 Ten kierunek nie oznacza, że wszystkie funkcje docelowego prototypu, pilotaż lub
 pakiet instalacyjny są już zaimplementowane.

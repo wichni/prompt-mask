@@ -4,10 +4,10 @@
 
 - zestaw: `MED-001-v1`, 24 przypadki i 28 oznaczonych zakresów ochrony,
 - badany stan: roboczy na bazie
-  `6eadb8ac3676c11717ba76fe8dd27dea1f409c70`,
-- silnik: stan roboczy po MED-004, korekcie granic e-maila i dodaniu
-  kontekstowych sekretów, z detektorami PESEL, e-maila, telefonu, dokładnych pól
-  pacjenta i hasła oraz typu SECRET dla zatwierdzonych kontekstów,
+  `0602da6a1080ae0de99624bc1d63ffa37c509ef8`,
+- silnik: stan roboczy po MED-005, z detektorami PESEL, e-maila, telefonu,
+  dokładnych pól pacjenta i hasła oraz typu SECRET dla zatwierdzonych
+  kontekstów,
 - dane: wyłącznie wartości utworzone na potrzeby testów; bez logów firmy,
   danych pacjentów i działających sekretów.
 
@@ -91,6 +91,14 @@ podglądem, a niezamknięty, nieobsługiwany lub już zamaskowany zapis nie daje
 częściowego wykrycia. Te dodatkowe przypadki nie zmieniają golda ani powyższych
 metryk MED-001-v1.
 
+MED-005 dodaje poza korpusem regresje dla tokenu Bearer w cudzysłowach i JSON-ie,
+nieobsługiwanych znaków i limitu wartości, istniejących oznaczeń, a także dla
+`email=` z kolejnym `=` w części lokalnej adresu oraz w parametrze URL. Testy
+sprawdzają dokładne zakresy UTF-16, składnię po podmianie, ponowną analizę,
+cofnięcie i brak pełnych wartości w komunikatach. Zestaw `MED-001-v1`, gold i
+powyższe metryki pozostają bez zmian; tych regresji nie należy przedstawiać jako
+pomiaru skuteczności na wszystkich danych.
+
 ## Kontrole tekstu
 
 Testy sprawdzają podmianę automatycznych wykryć, zachowanie kodów błędów,
@@ -104,14 +112,13 @@ nienaruszanie składni poza wybranym zakresem.
 ## Kolejność dalszych prac
 
 MED-004 zamyka pierwszeństwo pełnej wartości hasła i granice jego przypisań.
-Osobny zatwierdzony etap poprawił granice e-maila w `MIX-04` i `SEC-04`, a
-obecny domyka sześć sekretów kontekstowych w korpusie. Dalszy osobno zatwierdzany
-etap:
+MED-005 domyka cytowane granice Bearer oraz `email=` z kolejnym `=` w części
+lokalnej. Po osobnym odbiorze Chrome i Edge dalszy etap wymaga nowej decyzji:
 
-1. Rozważyć nazwy pacjentów poza dokładnymi polami. MED-002
-   zamyka `MED-06`, `MED-07` i część `MIX-02`, a MED-003 dodaje dokładne pola
-   imienia i nazwiska, ale `MIX-03` i `EDGE-01` pozostają FN. Szersza detekcja
-   nazw ma wysoki koszt fałszywych alarmów i wymaga osobnego korpusu negatywnego.
+1. Rozważyć jawne pole PESEL dla wartości z błędną datą lub sumą kontrolną bez
+   osłabiania walidacji wszystkich 11-cyfrowych ciągów. Nazwy poza dokładnymi
+   polami nadal pozostają osobnym, ryzykownym kandydatem wymagającym korpusu
+   negatywnego.
 
 ## Uruchomienie
 

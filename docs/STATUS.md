@@ -1,6 +1,6 @@
 # Status projektu
 
-Stan na: 11.09.2026
+Stan na: 12.09.2026
 Wersja manifestu: `0.1.0`
 
 ## Działa obecnie
@@ -10,8 +10,9 @@ Wersja manifestu: `0.1.0`
   pomocniczym na stronie jest mała kontrolka `[•••]` przy edytorze,
 - lokalna analiza tekstu podczas pisania,
 - detekcja PESEL z datą i sumą kontrolną,
-- detekcja praktycznych adresów e-mail z zachowaniem etykiet przypisań i odmową
-  dla danych uwierzytelniających URI oraz polskich numerów telefonu,
+- detekcja praktycznych adresów e-mail z zachowaniem jawnej etykiety `email=`
+  także wtedy, gdy część lokalna zawiera kolejny znak `=`, oraz odmową dla
+  danych uwierzytelniających URI i polskich numerów telefonu,
 - detekcja wartości dokładnych pól `patientName`, `patientFirstName`,
   `patientLastName`, `patientId` i `password` w JSON oraz ograniczonym formacie
   `klucz=wartość`, bez zgadywania nazwisk lub haseł w zwykłym tekście; pełna
@@ -19,7 +20,8 @@ Wersja manifestu: `0.1.0`
   cytowanie i istniejące oznaczenia nie dają częściowych wykryć,
 - detekcja typu SECRET dla wartości dokładnych pól `client_secret`, `api_key` i
   `apiToken`, wartości po pełnym prefiksie nagłówka `Authorization: Bearer` oraz
-  hasła URI; cała wartość wygrywa z heurystykami i ma stały podgląd `•••`,
+  hasła URI; token Bearer zachowuje otaczające cudzysłowy, nawiasy i separatory,
+  a cała wartość wygrywa z heurystykami i ma stały podgląd `•••`,
 - lista propozycji z typem i częściowo ukrytym podglądem,
 - biało-niebieski panel ze stałym miejscem na dostępny komunikat operacji,
 - jedna jawna akcja „Maskuj”; brak decyzji pozostawia propozycję widoczną,
@@ -89,7 +91,7 @@ treści. Aktualna funkcja pomaga użytkownikowi zauważyć i zmienić dane przed
 
 - `npm run typecheck` — zaliczony,
 - `npm run test:medical` — zaliczone testy: 19/19,
-- `npm test` — zaliczone testy: 210/210 w 11 plikach,
+- `npm test` — zaliczone testy: 236/236 w 12 plikach,
 - `npm run build` — zaliczony; manifest nie publikuje już zasobów dodatkowego
   pola, a content script pozostaje samodzielnym bundłem,
 - testy MED-002/MED-003/MED-004 obejmują dokładne zakresy JSON i
@@ -109,6 +111,11 @@ treści. Aktualna funkcja pomaga użytkownikowi zauważyć i zmienić dane przed
   pierwszeństwo nad heurystykami, powtórzoną wartość w haśle i hoście, limity,
   placeholdery, aliasy, niepełny kontekst, ścisłe komunikaty, podgląd `•••`,
   maskowanie, ponowną analizę i cofnięcie bez przekazania wartości do panelu,
+- regresje MED-005 obejmują Bearer w pojedynczym i podwójnym cudzysłowie oraz
+  JSON-ie, znaki tokenu i padding, limity, nieobsługiwany kandydat, pomijanie
+  oznaczeń, dokładne zakresy UTF-16, `email=` z kolejnym `=` w części lokalnej,
+  oba położenia parametru URL, pojedyncze i zbiorcze maskowanie, ponowną analizę,
+  cofnięcie oraz brak pełnych wartości w komunikatach panelu,
 - testy negatywne obejmują błędny PESEL, niejednoznaczny edytor, surowy tekst w
   komunikacie, obcy panel, nieaktualną decyzję, niepełny zestaw zbiorczy i
   powtórzone polecenie, unieważnienie cofania po edycji i wysłaniu, ręczny
@@ -137,21 +144,22 @@ treści. Aktualna funkcja pomaga użytkownikowi zauważyć i zmienić dane przed
 ## CI
 
 - Workflow `CI`, job `Verify`, zakończył się sukcesem po pushu do `main` dla
-  bazowego commita `6eadb8ac3676c11717ba76fe8dd27dea1f409c70`:
-  [run 34622445482](https://github.com/wichni/prompt-mask/actions/runs/34622445482).
-  W logu potwierdzono typecheck, 161/161 testów i build. Ten run nie obejmuje
-  roboczej poprawki MED-004.
+  bazowego commita `0602da6a1080ae0de99624bc1d63ffa37c509ef8`:
+  [run 34637094960](https://github.com/wichni/prompt-mask/actions/runs/34637094960).
+  W logu potwierdzono typecheck, 210/210 testów i build. Ten run obejmuje
+  MED-004, wcześniejszą korektę e-maili i sekrety kontekstowe, ale nie obejmuje
+  roboczej poprawki MED-005.
 - Workflow obejmuje też pull requesty do `main` i uruchomienie ręczne. Zielony
   run nie jest dowodem wymaganej blokady scalania; w czasie przeglądu API GitHub
   zwracało dla `main` `protected: false`. Zmiany administracyjne repozytorium
   pozostają poza tym etapem.
-- Dla roboczych zmian do etapu sekretów kontekstowych lokalnie zaliczono
-  `npm run typecheck`, `npm test` (210/210), `npm run test:medical` (19/19),
-  `npm run build` i `git diff --check`. Nie uruchamiano dla nich zdalnego CI.
+- Dla roboczej poprawki MED-005 lokalnie zaliczono `npm run typecheck`,
+  `npm test` (236/236, w tym korpus MED-001), `npm run build` i
+  `git diff --check`. Nie uruchamiano dla niej zdalnego CI.
 
-## Pomiar MED-001 po dodaniu sekretów kontekstowych
+## Pomiar MED-001 po MED-005
 
-- W stanie roboczym na bazie `6eadb8ac3676c11717ba76fe8dd27dea1f409c70`
+- W stanie roboczym na bazie `0602da6a1080ae0de99624bc1d63ffa37c509ef8`
   istnieją 24 syntetyczne przypadki, 28 niezależnych oznaczeń ochrony, jawna
   baza wyników obecnego silnika oraz testy obliczeń i podmiany.
 - Dla kategorii obsługiwanych i reprezentowanych w korpusie dokładne wyniki to
@@ -210,6 +218,9 @@ Korekta granic e-maila również ma wyłącznie dowód automatyczny; zachowanie
 ręcznie w Chrome ani Edge.
 Sekrety kontekstowe również mają tylko dowód automatyczny; ich podgląd,
 maskowanie i cofnięcie nie zostały odebrane ręcznie w Chrome ani Edge.
+MED-005 ma tylko dowód automatyczny. Zachowanie cytowanego Bearer, parametru
+`email=` z kolejnym `=` w adresie, podmiany zbiorczej i cofnięcia nie zostało
+odebrane ręcznie w Chrome ani Edge.
 
 ## Wymagany odbiór użytkownika
 
@@ -234,8 +245,9 @@ uszkodzonych celów.
 
 ## Bieżący etap
 
-CI-001 ma udany przebieg dla wskazanej rewizji, ale nie jest wymuszoną blokadą
-scalania. Stan roboczy obejmuje MED-004, granice e-maila oraz kontekstowe sekrety
-z korpusu; nie obejmuje aliasów ani sekretów w swobodnym tekście. Lokalnie
-zaliczono typecheck, 210/210 testów, 19/19 testów korpusu i build. Bieżąca zmiana
-nie ma jeszcze wyniku zdalnego CI ani ręcznego odbioru Chrome/Edge.
+MED-005 w stanie roboczym na bazie
+`0602da6a1080ae0de99624bc1d63ffa37c509ef8` naprawia zakres cytowanego tokenu
+Bearer oraz adresu po `email=`, gdy część lokalna zawiera `=`. Nie dodaje aliasów
+ani sekretów w swobodnym tekście. Lokalnie zaliczono typecheck, 236/236 testów,
+build i kontrolę diffu. CI bazy jest zielone, ale nie obejmuje MED-005; ręczny
+odbiór Chrome i Edge pozostaje niewykonany.

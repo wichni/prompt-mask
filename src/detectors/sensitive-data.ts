@@ -34,11 +34,8 @@ const isUriUserInfoCandidate = (
     URI_SCHEME_PREFIX.test(text.slice(0, start)));
 
 const emailValueOffset = (candidate: string): number => {
-  const at = candidate.lastIndexOf("@");
-  const assignment = candidate.lastIndexOf("=", at);
-  if (assignment < 0) return 0;
-  const prefix = candidate.slice(0, assignment);
-  return /(?:^|[?&])email$/iu.test(prefix) ? assignment + 1 : 0;
+  const assignment = /(?:^|[?&])email=/iu.exec(candidate);
+  return assignment ? assignment.index + assignment[0].length : 0;
 };
 
 const isValidDate = (year: number, month: number, day: number): boolean => {

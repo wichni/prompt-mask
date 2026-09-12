@@ -268,6 +268,111 @@ describe("native composer analysis", () => {
     expect(undoResults(panel).at(-1)).toMatchObject({ status: "SUCCESS" });
   });
 
+  it("preserves quoted Bearer syntax through masking, rescan and undo", () => {
+    const textarea = document.querySelector<HTMLTextAreaElement>("textarea")!;
+    const original =
+      'curl -H "Authorization: Bearer demo.jwt.token-7X" https://example.invalid';
+    textarea.value = original;
+    const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
+    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    const snapshot = snapshots(panel).at(-1)!;
+
+    expect(snapshot.detections).toEqual([
+      expect.objectContaining({ kind: "SECRET", maskedPreview: "•••" }),
+    ]);
+    expect(JSON.stringify(panel.postMessage.mock.calls)).not.toContain(
+      "demo.jwt.token-7X",
+    );
+
+    panel.fireMessage({
+      type: "MASK_DETECTIONS",
+      sessionId: snapshot.sessionId,
+      revision: snapshot.revision,
+      detectionIds: snapshot.detections.map(({ id }) => id),
+    });
+
+    expect(textarea.value).toBe(
+      'curl -H "Authorization: Bearer [SECRET_1]" https://example.invalid',
+    );
+    expect(snapshots(panel).at(-1)?.detections).toEqual([]);
+    const result = maskResults(panel).at(-1)!;
+    if (result.status !== "SUCCESS") throw new Error("Expected mask success");
+    panel.fireMessage({ type: "UNDO_MASK", operationId: result.undoOperationId });
+
+    expect(textarea.value).toBe(original);
+    expect(undoResults(panel).at(-1)).toMatchObject({ status: "SUCCESS" });
+  });
+
+  it("preserves email= before a local part containing equals and restores it", () => {
+    const textarea = document.querySelector<HTMLTextAreaElement>("textarea")!;
+    const original = "email=qa=demo@example.com status=422";
+    textarea.value = original;
+    const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
+    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    const snapshot = snapshots(panel).at(-1)!;
+
+    expect(snapshot.detections).toEqual([
+      expect.objectContaining({ kind: "EMAIL", maskedPreview: "q•••@e•••.com" }),
+    ]);
+    expect(JSON.stringify(panel.postMessage.mock.calls)).not.toContain(
+      "qa=demo@example.com",
+    );
+
+    panel.fireMessage({
+      type: "MASK_DETECTIONS",
+      sessionId: snapshot.sessionId,
+      revision: snapshot.revision,
+      detectionIds: snapshot.detections.map(({ id }) => id),
+    });
+
+    expect(textarea.value).toBe("email=[EMAIL_1] status=422");
+    expect(snapshots(panel).at(-1)?.detections).toEqual([]);
+    const result = maskResults(panel).at(-1)!;
+    if (result.status !== "SUCCESS") throw new Error("Expected mask success");
+    panel.fireMessage({ type: "UNDO_MASK", operationId: result.undoOperationId });
+
+    expect(textarea.value).toBe(original);
+    expect(undoResults(panel).at(-1)).toMatchObject({ status: "SUCCESS" });
+  });
+
+  it("bulk-masks quoted Bearer and assigned email without leaking values", () => {
+    const textarea = document.querySelector<HTMLTextAreaElement>("textarea")!;
+    const original = [
+      'curl -H "Authorization: Bearer demo.jwt.token-7X" https://example.invalid',
+      "email=qa=demo@example.com status=422",
+    ].join("\n");
+    textarea.value = original;
+    const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
+    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    const snapshot = snapshots(panel).at(-1)!;
+
+    expect(snapshot.detections.map(({ kind }) => kind)).toEqual([
+      "SECRET",
+      "EMAIL",
+    ]);
+    expect(JSON.stringify(panel.postMessage.mock.calls)).not.toContain(
+      "demo.jwt.token-7X",
+    );
+    expect(JSON.stringify(panel.postMessage.mock.calls)).not.toContain(
+      "qa=demo@example.com",
+    );
+
+    panel.fireMessage({
+      type: "MASK_DETECTIONS",
+      sessionId: snapshot.sessionId,
+      revision: snapshot.revision,
+      detectionIds: snapshot.detections.map(({ id }) => id),
+    });
+
+    expect(textarea.value).toBe(
+      [
+        'curl -H "Authorization: Bearer [SECRET_1]" https://example.invalid',
+        "email=[EMAIL_1] status=422",
+      ].join("\n"),
+    );
+    expect(snapshots(panel).at(-1)?.detections).toEqual([]);
+  });
+
   it("masks a complete JSON password containing a PESEL and restores it on undo", () => {
     const textarea = document.querySelector<HTMLTextAreaElement>("textarea")!;
     const original = '{"password":"demo:02070803628:tail"}';

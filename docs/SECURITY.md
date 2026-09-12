@@ -125,9 +125,10 @@ wysłać surowy tekst, dlatego UI nie może sugerować pełnej ochrony.
 ## Zakres obecnych detektorów
 
 - PESEL: 11 cyfr, poprawna zakodowana data i suma kontrolna,
-- e-mail: praktyczny adres z domeną wieloczłonową; rozpoznana etykieta `email=`
-  wyznacza granicę wartości w logu lub parametrze URL, a fragment `hasło@host`
-  po `scheme://user:` nie jest klasyfikowany jako adres,
+- e-mail: praktyczny adres z domeną wieloczłonową; dokładna etykieta `email=`
+  wyznacza granicę wartości w logu lub parametrze URL także wtedy, gdy część
+  lokalna adresu zawiera kolejny `=`, a fragment `hasło@host` po
+  `scheme://user:` nie jest klasyfikowany jako adres,
 - telefon: dziewięć cyfr, opcjonalne `+48`, spacje albo myślniki.
 - nazwa pacjenta: wartość dokładnego pola `patientName`, `patientFirstName` lub
   `patientLastName` w JSON albo cytowanym przypisaniu `klucz=wartość`; bez
@@ -140,6 +141,13 @@ wysłać surowy tekst, dlatego UI nie może sugerować pełnej ochrony.
   `apiToken`, wartość po pełnym `Authorization: Bearer` albo hasło pomiędzy
   użytkownikiem i hostem w `scheme://user:password@host`.
 
+Token po pełnym prefiksie `Authorization: Bearer` obsługuje litery, cyfry,
+`-`, `.`, `_`, `~`, `+`, `/` i końcowe `=` do 128 jednostek UTF-16. Koniec
+wartości może wyznaczać koniec tekstu, biały znak, przecinek, średnik,
+zamykający cudzysłów albo nawias. Inny znak wewnątrz kandydata odrzuca cały
+kandydat zamiast ujawniać pozornie kompletny prefiks; detektor nie dekoduje ani
+nie sprawdza tokenu u wystawcy.
+
 Pola strukturalne są rozpoznawane wyłącznie w ograniczonym formacie i nie
 obsługują dowolnych aliasów, złożonych ucieczek ani sekretów bez jawnej nazwy
 pola. Kompletna wartość dokładnego pola `password` lub sekretu technicznego ma
@@ -148,7 +156,8 @@ jako jedyna trafia do listy propozycji. Cytowane przypisanie musi mieć zgodne
 domknięcie i nie może zawierać sekwencji z backslashem; błędny zapis nie daje
 częściowego dopasowania bez cudzysłowów. Nagłówek Bearer wymaga dokładnej nazwy
 `Authorization`, a hasło URI — schematu, użytkownika i hosta. Istniejące
-oznaczenie jest rozpoznawane w całości i pomijane. Dla pól pacjenta, haseł i
+oznaczenie jest rozpoznawane w całości i pomijane także przy sąsiednim
+cudzysłowie lub nawiasie. Dla pól pacjenta, haseł i
 sekretów panel otrzymuje stały podgląd `•••`, bez fragmentu wartości. Alias,
 sama nazwa pola, samo słowo `Bearer` i swobodny tekst nie są wykryciem.
 Detektory heurystyczne mogą generować fałszywe alarmy i pominięcia. Decyzja
