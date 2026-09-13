@@ -5,6 +5,7 @@ import {
 } from "../core/detection";
 import { detectStructuredSensitiveData } from "./structured-sensitive-data";
 import { detectContextualSecrets } from "./contextual-secret-data";
+import { detectContextualPesels } from "./contextual-pesel-data";
 
 const EMAIL_PATTERN = /[a-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[a-z0-9!#$%&'*+/=?^_`{|}~-]+)*@[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+/giu;
 const PESEL_PATTERN = /\d{11}/gu;
@@ -140,6 +141,7 @@ const priority: Record<DetectionKind, number> = {
 export const detectSensitiveData = (text: string): SensitiveDetection[] => {
   const candidates = [
     ...collectMatches(text, PESEL_PATTERN, "PESEL", isValidPesel),
+    ...detectContextualPesels(text),
     ...detectStructuredSensitiveData(text),
     ...detectContextualSecrets(text),
     ...collectEmailMatches(text),

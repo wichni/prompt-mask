@@ -4,8 +4,8 @@
 
 - zestaw: `MED-001-v1`, 24 przypadki i 28 oznaczonych zakresów ochrony,
 - badany stan: roboczy na bazie
-  `0602da6a1080ae0de99624bc1d63ffa37c509ef8`,
-- silnik: stan roboczy po MED-005, z detektorami PESEL, e-maila, telefonu,
+  `39783d439d42d0ddd46d6e60d5dff09307a657bd`,
+- silnik: stan roboczy po MED-006, z detektorami PESEL, e-maila, telefonu,
   dokładnych pól pacjenta i hasła oraz typu SECRET dla zatwierdzonych
   kontekstów,
 - dane: wyłącznie wartości utworzone na potrzeby testów; bez logów firmy,
@@ -36,15 +36,15 @@ różnic i świadomej aktualizacji tego raportu.
 
 | Zakres | TP | FN | FP | Czułość | Precyzja |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| PESEL | 2 | 2 | 0 | 50,00% | 100,00% |
+| PESEL | 4 | 0 | 0 | 100,00% | 100,00% |
 | E-mail | 7 | 0 | 0 | 100,00% | 100,00% |
 | Telefon | 4 | 0 | 1 | 100,00% | 80,00% |
 | Nazwa pacjenta | 1 | 2 | 0 | 33,33% | 100,00% |
 | Identyfikator pacjenta | 2 | 0 | 0 | 100,00% | 100,00% |
 | Hasło | 2 | 0 | 0 | 100,00% | 100,00% |
-| Kategorie obsługiwane i reprezentowane w korpusie | 24 | 4 | 1 | 85,71% | 96,00% |
+| Kategorie obsługiwane i reprezentowane w korpusie | 26 | 2 | 1 | 92,86% | 96,30% |
 | Sekret techniczny | 6 | 0 | 0 | 100,00% | 100,00% |
-| Pełny oczekiwany zakres | 24 | 4 | 1 | 85,71% | 96,00% |
+| Pełny oczekiwany zakres | 26 | 2 | 1 | 92,86% | 96,30% |
 
 Pola `patientFirstName` i `patientLastName` są objęte testami jednostkowymi i
 integracyjnymi, ale MED-001-v1 nie zawiera jeszcze osobnych oznaczeń tych
@@ -55,8 +55,8 @@ W jednym z sześciu przypadków bez danych do ukrycia wystąpił fałszywy alarm
 | ID | TP | FN | FP | Najważniejszy wynik |
 | --- | ---: | ---: | ---: | --- |
 | MED-01 | 1 | 0 | 0 | poprawny PESEL |
-| MED-02 | 0 | 1 | 0 | PESEL z błędną sumą pominięty |
-| MED-03 | 0 | 1 | 0 | PESEL z niemożliwą datą pominięty |
+| MED-02 | 1 | 0 | 0 | PESEL z błędną sumą wykryty dzięki etykiecie |
+| MED-03 | 1 | 0 | 0 | PESEL z błędną sumą wykryty w polu JSON |
 | MED-04 | 1 | 0 | 0 | dokładny e-mail w JSON |
 | MED-05 | 1 | 0 | 0 | dokładny telefon z prefiksem |
 | MED-06 | 1 | 0 | 0 | dokładna wartość `patientName` w JSON |
@@ -99,6 +99,16 @@ cofnięcie i brak pełnych wartości w komunikatach. Zestaw `MED-001-v1`, gold i
 powyższe metryki pozostają bez zmian; tych regresji nie należy przedstawiać jako
 pomiaru skuteczności na wszystkich danych.
 
+MED-006 dodaje kontekst dokładnego pola `pesel` bez osłabiania ścisłej
+walidacji samodzielnych 11-cyfrowych ciągów. Dzięki temu MED-02 i MED-03 stają
+się dokładnymi TP bez zmiany ich tekstu ani golda. Wartość `02320803625` z
+MED-03 koduje poprawną datę i ma błędną sumę kontrolną, mimo syntetycznego kodu
+`INVALID_BIRTH_DATE` w dalszym polu. Osobna regresja niemożliwej daty przy
+poprawnej sumie używa `02323203627`. Testy poza korpusem obejmują granice pól,
+UTF-16, limity białych znaków, konflikty z `PASSWORD` i `SECRET`, poprawność
+JSON po podmianie, ponowną analizę, zbiorcze maskowanie, cofnięcie i brak pełnej
+wartości w komunikatach panelu.
+
 ## Kontrole tekstu
 
 Testy sprawdzają podmianę automatycznych wykryć, zachowanie kodów błędów,
@@ -111,14 +121,10 @@ nienaruszanie składni poza wybranym zakresem.
 
 ## Kolejność dalszych prac
 
-MED-004 zamyka pierwszeństwo pełnej wartości hasła i granice jego przypisań.
-MED-005 domyka cytowane granice Bearer oraz `email=` z kolejnym `=` w części
-lokalnej. Po osobnym odbiorze Chrome i Edge dalszy etap wymaga nowej decyzji:
-
-1. Rozważyć jawne pole PESEL dla wartości z błędną datą lub sumą kontrolną bez
-   osłabiania walidacji wszystkich 11-cyfrowych ciągów. Nazwy poza dokładnymi
-   polami nadal pozostają osobnym, ryzykownym kandydatem wymagającym korpusu
-   negatywnego.
+MED-006 zamyka obsługę dokładnego pola `pesel` dla wartości z błędną datą lub
+sumą kontrolną. Ręczny odbiór Chrome i Edge pozostaje osobnym wymaganiem. Nazwy
+poza dokładnymi polami oraz fałszywy alarm numeru zlecenia są nadal odrębnymi,
+niezatwierdzonymi tematami wymagającymi własnego korpusu negatywnego.
 
 ## Uruchomienie
 

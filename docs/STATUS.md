@@ -1,6 +1,6 @@
 # Status projektu
 
-Stan na: 12.09.2026
+Stan na: 13.09.2026
 Wersja manifestu: `0.1.0`
 
 ## Działa obecnie
@@ -9,7 +9,9 @@ Wersja manifestu: `0.1.0`
 - obserwacja natywnego edytora ChatGPT bez dodatkowego pola; jedynym elementem
   pomocniczym na stronie jest mała kontrolka `[•••]` przy edytorze,
 - lokalna analiza tekstu podczas pisania,
-- detekcja PESEL z datą i sumą kontrolną,
+- detekcja samodzielnego PESEL-u z poprawną datą i sumą kontrolną oraz
+  dokładnie 11 cyfr ASCII w jawnym polu `pesel` niezależnie od wyniku
+  walidacji; etykieta określa przesłankę ochrony, nie poprawność numeru,
 - detekcja praktycznych adresów e-mail z zachowaniem jawnej etykiety `email=`
   także wtedy, gdy część lokalna zawiera kolejny znak `=`, oraz odmową dla
   danych uwierzytelniających URI i polskich numerów telefonu,
@@ -91,7 +93,7 @@ treści. Aktualna funkcja pomaga użytkownikowi zauważyć i zmienić dane przed
 
 - `npm run typecheck` — zaliczony,
 - `npm run test:medical` — zaliczone testy: 19/19,
-- `npm test` — zaliczone testy: 236/236 w 12 plikach,
+- `npm test` — zaliczone testy: 280/280 w 13 plikach,
 - `npm run build` — zaliczony; manifest nie publikuje już zasobów dodatkowego
   pola, a content script pozostaje samodzielnym bundłem,
 - testy MED-002/MED-003/MED-004 obejmują dokładne zakresy JSON i
@@ -116,6 +118,13 @@ treści. Aktualna funkcja pomaga użytkownikowi zauważyć i zmienić dane przed
   oznaczeń, dokładne zakresy UTF-16, `email=` z kolejnym `=` w części lokalnej,
   oba położenia parametru URL, pojedyncze i zbiorcze maskowanie, ponowną analizę,
   cofnięcie oraz brak pełnych wartości w komunikatach panelu,
+- regresje MED-006 obejmują dokładny klucz `pesel` bez względu na wielkość
+  liter, przypisania przez `=` i `:`, JSON string, oba rodzaje cudzysłowów,
+  granice wartości i limitów białych znaków, indeksy UTF-16 po emoji, wiele
+  rekordów, błędną sumę i datę, brak częściowych dopasowań, aliasy, escape,
+  placeholdery, niecytowaną liczbę JSON, deduplikację poprawnego PESEL-u,
+  pierwszeństwo `PASSWORD` i `SECRET`, parsowalność JSON, maskowanie zbiorcze,
+  ponowną analizę, cofnięcie i brak pełnych wartości w komunikatach panelu,
 - testy negatywne obejmują błędny PESEL, niejednoznaczny edytor, surowy tekst w
   komunikacie, obcy panel, nieaktualną decyzję, niepełny zestaw zbiorczy i
   powtórzone polecenie, unieważnienie cofania po edycji i wysłaniu, ręczny
@@ -144,26 +153,25 @@ treści. Aktualna funkcja pomaga użytkownikowi zauważyć i zmienić dane przed
 ## CI
 
 - Workflow `CI`, job `Verify`, zakończył się sukcesem po pushu do `main` dla
-  bazowego commita `0602da6a1080ae0de99624bc1d63ffa37c509ef8`:
-  [run 34637094960](https://github.com/wichni/prompt-mask/actions/runs/34637094960).
-  W logu potwierdzono typecheck, 210/210 testów i build. Ten run obejmuje
-  MED-004, wcześniejszą korektę e-maili i sekrety kontekstowe, ale nie obejmuje
-  roboczej poprawki MED-005.
+  bazowego commita `39783d439d42d0ddd46d6e60d5dff09307a657bd`:
+  [run 34681034050](https://github.com/wichni/prompt-mask/actions/runs/34681034050).
+  W logu potwierdzono typecheck, 236/236 testów i build. Ten run obejmuje
+  MED-005, ale nie obejmuje roboczej poprawki MED-006.
 - Workflow obejmuje też pull requesty do `main` i uruchomienie ręczne. Zielony
   run nie jest dowodem wymaganej blokady scalania; w czasie przeglądu API GitHub
   zwracało dla `main` `protected: false`. Zmiany administracyjne repozytorium
   pozostają poza tym etapem.
-- Dla roboczej poprawki MED-005 lokalnie zaliczono `npm run typecheck`,
-  `npm test` (236/236, w tym korpus MED-001), `npm run build` i
+- Dla roboczej poprawki MED-006 lokalnie zaliczono `npm run typecheck`,
+  `npm test` (280/280), `npm run test:medical` (19/19), `npm run build` i
   `git diff --check`. Nie uruchamiano dla niej zdalnego CI.
 
-## Pomiar MED-001 po MED-005
+## Pomiar MED-001 po MED-006
 
-- W stanie roboczym na bazie `0602da6a1080ae0de99624bc1d63ffa37c509ef8`
+- W stanie roboczym na bazie `39783d439d42d0ddd46d6e60d5dff09307a657bd`
   istnieją 24 syntetyczne przypadki, 28 niezależnych oznaczeń ochrony, jawna
   baza wyników obecnego silnika oraz testy obliczeń i podmiany.
 - Dla kategorii obsługiwanych i reprezentowanych w korpusie dokładne wyniki to
-  TP 24, FN 4 i FP 1 (czułość 85,71%, precyzja 96,00%). Pełny oczekiwany zakres
+  TP 26, FN 2 i FP 1 (czułość 92,86%, precyzja 96,30%). Pełny oczekiwany zakres
   ma te same wyniki, ponieważ wszystkie oznaczone kategorie mają obecnie jawny
   detektor.
   Pola `patientFirstName` i `patientLastName` mają testy jednostkowe i
@@ -176,8 +184,9 @@ treści. Aktualna funkcja pomaga użytkownikowi zauważyć i zmienić dane przed
   golda ani metryk MED-001-v1. Kolejna korekta zmienia wyłącznie bazę wyników
   silnika: e-maile w `MIX-04` mają dokładne zakresy, a `SEC-04` nie daje
   fałszywego e-maila. Etap sekretów dodaje sześć dokładnych TP bez zmiany golda.
-  Nadal widoczne są telefoniczny fałszywy alarm, nieobsługiwane konteksty
-  sekretów oraz nazwy pacjentów poza dokładnymi polami.
+  MED-006 zmienia `MED-02` i `MED-03` z FN na dokładne TP bez zmiany tekstów lub
+  golda korpusu. Nadal widoczne są telefoniczny fałszywy alarm oraz nazwy
+  pacjentów poza dokładnymi polami.
 
 ## Dowody interfejsu
 
@@ -221,6 +230,9 @@ maskowanie i cofnięcie nie zostały odebrane ręcznie w Chrome ani Edge.
 MED-005 ma tylko dowód automatyczny. Zachowanie cytowanego Bearer, parametru
 `email=` z kolejnym `=` w adresie, podmiany zbiorczej i cofnięcia nie zostało
 odebrane ręcznie w Chrome ani Edge.
+MED-006 ma tylko dowód automatyczny. Różnica między błędnym PESEL-em bez
+etykiety i w dokładnym polu `pesel`, zachowanie JSON, maskowanie zbiorcze oraz
+cofnięcie nie zostały jeszcze odebrane ręcznie w Chrome ani Edge.
 
 ## Wymagany odbiór użytkownika
 
@@ -245,9 +257,10 @@ uszkodzonych celów.
 
 ## Bieżący etap
 
-MED-005 w stanie roboczym na bazie
-`0602da6a1080ae0de99624bc1d63ffa37c509ef8` naprawia zakres cytowanego tokenu
-Bearer oraz adresu po `email=`, gdy część lokalna zawiera `=`. Nie dodaje aliasów
-ani sekretów w swobodnym tekście. Lokalnie zaliczono typecheck, 236/236 testów,
-build i kontrolę diffu. CI bazy jest zielone, ale nie obejmuje MED-005; ręczny
-odbiór Chrome i Edge pozostaje niewykonany.
+MED-006 w stanie roboczym na bazie
+`39783d439d42d0ddd46d6e60d5dff09307a657bd` dodaje dokładne pole `pesel` dla
+11 cyfr ASCII, także gdy ścisła walidacja daty lub sumy zwraca `false`. Nie
+zmienia `isValidPesel`, typów komunikacji ani heurystyki dla nieopisanych
+ciągów. Lokalnie zaliczono typecheck, 280/280 testów, korpus 19/19, build i
+kontrolę diffu. CI bazy jest zielone, ale nie obejmuje MED-006; ręczny odbiór
+Chrome i Edge pozostaje niewykonany.

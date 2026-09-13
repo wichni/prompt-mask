@@ -373,6 +373,51 @@ describe("native composer analysis", () => {
     expect(snapshots(panel).at(-1)?.detections).toEqual([]);
   });
 
+  it("bulk-masks contextual PESEL fields and restores them on undo", () => {
+    const textarea = document.querySelector<HTMLTextAreaElement>("textarea")!;
+    const original = [
+      "pesel=02070803627; status=CHECKSUM_INVALID",
+      '{"PESEL":"02323203627","status":"INVALID_BIRTH_DATE"}',
+    ].join("\n");
+    textarea.value = original;
+    const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
+    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    const snapshot = snapshots(panel).at(-1)!;
+
+    expect(snapshot.detections.map(({ kind }) => kind)).toEqual([
+      "PESEL",
+      "PESEL",
+    ]);
+    expect(JSON.stringify(panel.postMessage.mock.calls)).not.toContain(
+      "02070803627",
+    );
+    expect(JSON.stringify(panel.postMessage.mock.calls)).not.toContain(
+      "02323203627",
+    );
+
+    panel.fireMessage({
+      type: "MASK_DETECTIONS",
+      sessionId: snapshot.sessionId,
+      revision: snapshot.revision,
+      detectionIds: snapshot.detections.map(({ id }) => id),
+    });
+
+    expect(textarea.value).toBe(
+      [
+        "pesel=[PESEL_1]; status=CHECKSUM_INVALID",
+        '{"PESEL":"[PESEL_2]","status":"INVALID_BIRTH_DATE"}',
+      ].join("\n"),
+    );
+    expect(snapshots(panel).at(-1)?.detections).toEqual([]);
+    const result = maskResults(panel).at(-1)!;
+    if (result.status !== "SUCCESS") throw new Error("Expected mask success");
+    panel.fireMessage({ type: "UNDO_MASK", operationId: result.undoOperationId });
+
+    expect(textarea.value).toBe(original);
+    expect(snapshots(panel).at(-1)?.detections).toHaveLength(2);
+    expect(undoResults(panel).at(-1)).toMatchObject({ status: "SUCCESS" });
+  });
+
   it("masks a complete JSON password containing a PESEL and restores it on undo", () => {
     const textarea = document.querySelector<HTMLTextAreaElement>("textarea")!;
     const original = '{"password":"demo:02070803628:tail"}';

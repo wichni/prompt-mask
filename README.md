@@ -14,6 +14,8 @@ zaznaczenie.
    `patientId`, `password`, `client_secret`, `api_key` lub `apiToken` w JSON i
    formacie `klucz=wartość`. Rozpoznaje też wartość nagłówka
    `Authorization: Bearer` i hasło w URI z jawnym `scheme://user:password@host`.
+   Dokładne pole `pesel` może otrzymać propozycję także wtedy, gdy jego
+   11-cyfrowa wartość nie przechodzi walidacji daty lub sumy kontrolnej.
 4. „Maskuj” zastępuje wyłącznie aktualny wykryty zakres oznaczeniem, np.
    `[PESEL_1]`.
 5. „Maskuj wszystkie wykryte (N)” zatwierdza dokładnie aktualną listę i wykonuje
@@ -130,6 +132,21 @@ Po maskowaniu mają pozostać odpowiednio zamykający cudzysłów i URL oraz dok
 etykieta `email=` i `status=422`. Ponowna analiza nie może proponować
 `[SECRET_1]`, a „Cofnij” ma odtworzyć każde wejście dokładnie. Następnie wklej
 oba w osobnych wierszach i sprawdź tę samą składnię po „Maskuj wszystkie”.
+
+Dla MED-006 porównaj poprawny PESEL bez etykiety, błędny bez etykiety oraz
+błędny w dokładnym polu `pesel`. Pierwszy, trzeci i czwarty mają dać
+propozycję:
+
+```text
+02070803628
+02070803627
+pesel=02070803627
+{"PESEL":"02323203627","error":"INVALID_BIRTH_DATE"}
+```
+
+W ostatnich dwóch wejściach maskowanie ma objąć wyłącznie cyfry, pozostawiając
+etykietę, cudzysłowy i kod błędu. Sprawdź także odmowę dla `[PESEL_1]` oraz 12
+cyfr, a następnie zbiorcze maskowanie dwóch jawnych pól i dokładne „Cofnij”.
 
 1. Wpisz do zwykłego pola ChatGPT syntetyczny e-mail, telefon i poprawny PESEL.
 2. Sprawdź biało-niebieską paletę, trzy propozycje, licznik oraz aktywne

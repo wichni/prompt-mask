@@ -143,10 +143,10 @@ describe("medical evaluation", () => {
     const result = evaluateCorpus(medicalCases, detectionsByCase());
     expect(result.byCategory).toEqual({
       PESEL: {
-        truePositive: 2,
-        falseNegative: 2,
+        truePositive: 4,
+        falseNegative: 0,
         falsePositive: 0,
-        sensitivity: 1 / 2,
+        sensitivity: 1,
         precision: 1,
       },
       EMAIL: {
@@ -207,18 +207,18 @@ describe("medical evaluation", () => {
       },
     });
     expect(result.supportedCategories).toEqual({
-      truePositive: 24,
-      falseNegative: 4,
+      truePositive: 26,
+      falseNegative: 2,
       falsePositive: 1,
-      sensitivity: 24 / 28,
-      precision: 24 / 25,
+      sensitivity: 26 / 28,
+      precision: 26 / 27,
     });
     expect(result.fullScope).toEqual({
-      truePositive: 24,
-      falseNegative: 4,
+      truePositive: 26,
+      falseNegative: 2,
       falsePositive: 1,
-      sensitivity: 24 / 28,
-      precision: 24 / 25,
+      sensitivity: 26 / 28,
+      precision: 26 / 27,
     });
     expect(result.negativeCasesWithFalsePositive).toBe(1);
     expect(result.negativeCaseCount).toBe(6);

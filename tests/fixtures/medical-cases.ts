@@ -58,18 +58,16 @@ export const medicalCases: MedicalCase[] = [
       { category: "PESEL", start: 21, end: 32, value: "02070803627", reason: "Wartość pola PESEL nadal wymaga ochrony" },
     ],
     mustPreserve: [preserve("CHECKSUM_INVALID", "Rodzaj błędu walidacji")],
-    knownLimitation: "Obecny detektor odrzuca PESEL z błędną sumą kontrolną.",
   }),
   defineCase({
     id: "MED-03",
-    title: "PESEL z niemożliwą datą w JSON",
+    title: "PESEL z błędną sumą kontrolną w JSON",
     format: "JSON",
     text: '{"pesel":"02320803625","error":"INVALID_BIRTH_DATE"}',
     protectedSpans: [
       { category: "PESEL", start: 10, end: 21, value: "02320803625", reason: "Wartość identyfikującego pola pesel" },
     ],
     mustPreserve: [preserve("INVALID_BIRTH_DATE", "Rodzaj błędu walidacji")],
-    knownLimitation: "Obecny detektor odrzuca PESEL z niemożliwą datą.",
   }),
   defineCase({
     id: "MED-04",

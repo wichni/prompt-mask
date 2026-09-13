@@ -2,8 +2,8 @@ import type { EvaluatedDetection } from "../helpers/medical-evaluation";
 
 export const medicalBaseline: Record<string, EvaluatedDetection[]> = {
   "MED-01": [{ kind: "PESEL", start: 21, end: 32 }],
-  "MED-02": [],
-  "MED-03": [],
+  "MED-02": [{ kind: "PESEL", start: 21, end: 32 }],
+  "MED-03": [{ kind: "PESEL", start: 10, end: 21 }],
   "MED-04": [{ kind: "EMAIL", start: 17, end: 38 }],
   "MED-05": [{ kind: "PHONE", start: 27, end: 42 }],
   "MED-06": [{ kind: "PATIENT_NAME", start: 16, end: 28 }],

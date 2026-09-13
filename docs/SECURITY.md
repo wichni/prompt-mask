@@ -124,7 +124,9 @@ wysłać surowy tekst, dlatego UI nie może sugerować pełnej ochrony.
 
 ## Zakres obecnych detektorów
 
-- PESEL: 11 cyfr, poprawna zakodowana data i suma kontrolna,
+- PESEL: samodzielny ciąg 11 cyfr z poprawną zakodowaną datą i sumą kontrolną
+  albo dokładnie 11 cyfr ASCII w jawnym polu `pesel`, niezależnie od wyniku
+  walidacji,
 - e-mail: praktyczny adres z domeną wieloczłonową; dokładna etykieta `email=`
   wyznacza granicę wartości w logu lub parametrze URL także wtedy, gdy część
   lokalna adresu zawiera kolejny `=`, a fragment `hasło@host` po
@@ -162,6 +164,17 @@ sekretów panel otrzymuje stały podgląd `•••`, bez fragmentu wartości. 
 sama nazwa pola, samo słowo `Bearer` i swobodny tekst nie są wykryciem.
 Detektory heurystyczne mogą generować fałszywe alarmy i pominięcia. Decyzja
 zawsze należy do użytkownika.
+
+Kontekstowy PESEL wymaga dokładnego, niezależnego od wielkości liter klucza
+`pesel`. Obsługuje ograniczone przypisanie przez `=` lub `:` z maksymalnie 16
+spacjami albo tabulatorami po każdej stronie separatora oraz JSON-owy string z
+maksymalnie 32 białymi znakami wokół dwukropka. Wartość musi składać się z
+dokładnie 11 cyfr ASCII i wypełniać całą wartość cytowaną lub niecytowaną;
+aliasy, przejście do następnego wiersza, escape, niedomknięcie, dodatkowy znak,
+liczba JSON bez cudzysłowów i istniejące oznaczenie są odrzucane. Zakres nie
+obejmuje klucza, separatorów ani cudzysłowów. Etykieta określa przesłankę do
+ochrony, a nie poprawność identyfikatora; `isValidPesel` nadal osobno sprawdza
+datę i sumę kontrolną. Pełne `PASSWORD` i `SECRET` zachowują pierwszeństwo.
 
 ## Checklist zmiany granicy
 
