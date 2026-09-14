@@ -1,9 +1,9 @@
 # promptMask
 
 Rozszerzenie Chromium, które lokalnie analizuje tekst wpisywany w natywnym
-edytorze ChatGPT. Wykrycia pojawiają się w panelu bocznym, a użytkownik decyduje,
-czy zamaskować pojedynczy fragment, wszystkie aktualne wykrycia albo własne
-zaznaczenie.
+edytorze ChatGPT także przy schowanym panelu. Dyskretny licznik przy edytorze
+sygnalizuje liczbę propozycji, a użytkownik otwiera panel dopiero wtedy, gdy chce
+je sprawdzić lub zamaskować.
 
 ## Działa obecnie
 
@@ -28,13 +28,17 @@ zaznaczenie.
    ogólnym oznaczeniem `[DANE_N]`, również gdy detektory niczego nie znalazły.
 9. Przy poprawnym zaznaczeniu nad prawą krawędzią edytora pojawia się mały skrót
    `[•••]`, uruchamiający dokładnie tę samą ręczną operację.
+10. „Schowaj” zamyka panel, ale pozostawia lokalną analizę i licznik na
+    widocznej karcie. Dymek pokazuje wyłącznie liczbę nowych propozycji i akcję
+    „Sprawdź”.
 
 Panel pokazuje u góry kompaktowy stan połączenia z ChatGPT, a potem sekcję
 „Do sprawdzenia”. Pusty szkic ma komunikat „Zacznij pisać”, natomiast tekst bez
 obsługiwanych danych — „Brak wykryć”. Komunikat operacji i „Cofnij” pojawiają
 się tylko wtedy, gdy są potrzebne. Pod listą pozostaje pomocnicze „Maskuj
 zaznaczenie” oraz stała informacja, że strona ChatGPT ma dostęp do wpisanego
-tekstu.
+tekstu. Po schowaniu panelu jego funkcje decyzyjne i `[•••]` są wyłączone;
+licznik służy tylko do ponownego otwarcia panelu.
 
 Aby zamaskować fragment ręcznie, zaznacz go myszą albo klawiaturą w polu
 wiadomości, a następnie kliknij `[•••]` przy edytorze albo „Maskuj zaznaczenie”
@@ -42,8 +46,9 @@ w panelu. Obie kontrolki korzystają z tej samej operacji. Jedna operacja zmieni
 tylko jedno wskazane wystąpienie. Pusty wybór, same białe znaki oraz zakres
 nachodzący na oznaczenie utworzone przez promptMask są odrzucane.
 
-Cofanie ma jeden poziom i działa tylko tak długo, jak użytkownik nie zmienił
-szkicu, pola, rozmowy ani aktywnej karty i nie wysłał wiadomości. Nowe udane
+Cofanie ma jeden poziom i działa tylko tak długo, jak użytkownik nie schował
+panelu, nie zmienił szkicu, pola, rozmowy ani aktywnej karty i nie wysłał
+wiadomości. Nowe udane
 maskowanie — także ręczne — zastępuje poprzednią możliwość cofnięcia. Po
 cofnięciu przywrócone dane ponownie pojawiają się jako propozycje, ale drugie
 cofnięcie nie jest dostępne. Zapisane zaznaczenie wygasa po edycji, innym
@@ -69,7 +74,8 @@ lub jej dostawca wcześniej nie otrzymali treści.
 
 - Node.js z rodziny wskazanej w [`.nvmrc`](.nvmrc)
 - npm dostarczony z tą wersją Node.js
-- Chrome 114+ albo aktualny Microsoft Edge
+- Chrome 142+
+- Microsoft Edge wyłącznie po osobnym sprawdzeniu dostępności API i odbiorze
 
 ```bash
 nvm use
@@ -88,7 +94,7 @@ odpowiednik znajdują się w [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md#continu
 2. Włącz tryb deweloperski.
 3. Wybierz „Załaduj rozpakowane” i wskaż katalog `dist`.
 4. Otwórz `https://chatgpt.com/` i nową rozmowę.
-5. Kliknij ikonę promptMask, aby otworzyć panel boczny.
+5. Zacznij pisać albo kliknij ikonę promptMask, aby otworzyć panel boczny.
 
 Po kolejnym buildzie kliknij „Odśwież” na karcie rozszerzenia, a następnie
 odśwież stronę ChatGPT.
@@ -96,6 +102,26 @@ odśwież stronę ChatGPT.
 ## Ręczny odbiór bieżącego etapu
 
 Używaj wyłącznie danych utworzonych na potrzeby testu.
+
+Najpierw odbierz zachowanie BG-001 w Chrome 142 lub nowszym:
+
+1. Po F5, bez otwierania panelu, wpisz `email=qa@example.com`. Sprawdź licznik,
+   dymek i zachowanie fokusu edytora. Zmniejsz i zwiększ okno: kontrolki mają
+   pozostać przy edytorze i wewnątrz viewportu; przy braku miejsca nad polem
+   powinny przejść pod nie.
+2. Dopisz zwykły tekst, zamknij dymek i dodaj kolejny typ danych. Ten sam wynik
+   nie powinien ponawiać dymka, a wzrost liczby powinien użyć aktualnej wartości.
+3. Otwórz panel kolejno przez „Sprawdź”, licznik i ikonę rozszerzenia.
+4. Sprawdź pojedyncze, zbiorcze i ręczne maskowanie oraz dokładne „Cofnij”.
+5. Użyj „Schowaj” i natywnego X. W obu przypadkach analiza ma działać dalej,
+   a po ponownym otwarciu stare „Cofnij” i sukces nie mogą wrócić.
+6. Powtórz na dwóch rozmowach, kartach i oknach oraz po zmianie rozmowy, F5,
+   przejściu na inną domenę i powrocie.
+7. Sprawdź uśpienie lub diagnostyczny restart workera, klawiaturę, zoom, wąski
+   panel, limit tekstu i brak edytora.
+
+Zapisz wersję Chrome i systemu. Edge wymaga oddzielnego odbioru; testy
+automatyczne nie potwierdzają zachowania natywnego panelu ani gestu użytkownika.
 
 Przed pozostałymi scenariuszami wpisz:
 

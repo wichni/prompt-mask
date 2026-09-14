@@ -5,7 +5,7 @@ export const ManualMaskAction = ({
 }: {
   disabled: boolean;
   instruction: string;
-  onMask: () => void;
+  onMask: (source: HTMLButtonElement) => void;
 }) => (
   <div className="manual-mask-action">
     <div>
@@ -17,7 +17,7 @@ export const ManualMaskAction = ({
     <button
       className="manual-mask"
       disabled={disabled}
-      onClick={onMask}
+      onClick={(event) => onMask(event.currentTarget)}
       type="button"
     >
       Maskuj zaznaczenie

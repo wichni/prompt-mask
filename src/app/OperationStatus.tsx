@@ -13,7 +13,7 @@ export const OperationStatus = ({
   undoDisabled,
 }: {
   feedback: PanelFeedback | null;
-  onUndo: () => void;
+  onUndo: (source: HTMLButtonElement) => void;
   undoAvailable: boolean;
   undoDisabled: boolean;
 }) => {
@@ -35,7 +35,7 @@ export const OperationStatus = ({
           aria-label="Cofnij ostatnie maskowanie"
           className="undo-mask"
           disabled={undoDisabled}
-          onClick={onUndo}
+          onClick={(event) => onUndo(event.currentTarget)}
           type="button"
         >
           Cofnij

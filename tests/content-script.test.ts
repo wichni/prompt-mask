@@ -8,6 +8,27 @@ import {
   type SelectionState,
   type UndoResult,
 } from "../src/platform/chromium/messages";
+import { PANEL_VIEW_READY } from "../src/platform/chromium/side-panel-signals";
+
+const noticeMock = vi.hoisted(() => ({
+  mount: vi.fn(),
+  unmount: vi.fn(),
+  setPanelVisible: vi.fn(),
+  showSearching: vi.fn(),
+  showReady: vi.fn(),
+  showUnavailable: vi.fn(),
+}));
+
+vi.mock("../src/providers/chatgpt/background-notice", () => ({
+  BackgroundNotice: class {
+    mount = noticeMock.mount;
+    unmount = noticeMock.unmount;
+    setPanelVisible = noticeMock.setPanelVisible;
+    showSearching = noticeMock.showSearching;
+    showReady = noticeMock.showReady;
+    showUnavailable = noticeMock.showUnavailable;
+  },
+}));
 
 interface ListenerSlot<T> {
   listener?: T;
@@ -15,6 +36,9 @@ interface ListenerSlot<T> {
 
 const runtimeId = "prompt-mask-test";
 const onConnect: ListenerSlot<(port: chrome.runtime.Port) => void> = {};
+const onRuntimeMessage: ListenerSlot<
+  (message: unknown, sender: chrome.runtime.MessageSender) => void
+> = {};
 const createdPorts = new Set<{ fireDisconnect: () => void }>();
 
 const createPort = (senderUrl: string) => {
@@ -52,6 +76,11 @@ const snapshots = (port: ReturnType<typeof createPort>): AnalysisSnapshot[] =>
         "type" in message &&
         message.type === "ANALYSIS_SNAPSHOT",
     );
+
+const connectPanel = (port: ReturnType<typeof createPort>): void => {
+  onConnect.listener?.(port as unknown as chrome.runtime.Port);
+  port.fireMessage(PANEL_VIEW_READY);
+};
 
 const maskResults = (port: ReturnType<typeof createPort>): MaskResult[] =>
   port.postMessage.mock.calls
@@ -100,6 +129,7 @@ const undoResults = (port: ReturnType<typeof createPort>): UndoResult[] =>
 
 beforeEach(async () => {
   vi.resetModules();
+  Object.values(noticeMock).forEach((mock) => mock.mockClear());
   document
     .querySelectorAll("#prompt-mask-manual-shortcut")
     .forEach((element) => element.remove());
@@ -108,6 +138,7 @@ beforeEach(async () => {
     callback(0);
     return 1;
   });
+  vi.stubGlobal("cancelAnimationFrame", vi.fn());
   vi.stubGlobal(
     "MutationObserver",
     class {
@@ -124,6 +155,18 @@ beforeEach(async () => {
         addListener: (listener: (port: chrome.runtime.Port) => void) => {
           onConnect.listener = listener;
         },
+        removeListener: vi.fn(),
+      },
+      onMessage: {
+        addListener: (
+          listener: (
+            message: unknown,
+            sender: chrome.runtime.MessageSender,
+          ) => void,
+        ) => {
+          onRuntimeMessage.listener = listener;
+        },
+        removeListener: vi.fn(),
       },
     },
   });
@@ -132,12 +175,24 @@ beforeEach(async () => {
 
 afterEach(() => {
   for (const port of createdPorts) port.fireDisconnect();
+  window.dispatchEvent(new Event("unload"));
   createdPorts.clear();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
 
 describe("native composer analysis", () => {
+  it("analyzes the active composer before the panel is opened", () => {
+    const textarea = document.querySelector<HTMLTextAreaElement>("textarea")!;
+    noticeMock.showReady.mockClear();
+
+    textarea.value = "anna.test@example.com";
+    textarea.dispatchEvent(new Event("input", { bubbles: true }));
+
+    expect(createdPorts.size).toBe(0);
+    expect(noticeMock.showReady).toHaveBeenLastCalledWith(textarea, 1, false);
+  });
+
   it("starts only for the trusted side panel", () => {
     const untrusted = createPort("chrome-extension://other/side-panel.html");
 
@@ -147,12 +202,108 @@ describe("native composer analysis", () => {
     expect(untrusted.postMessage).not.toHaveBeenCalled();
   });
 
+  it("pauses on a hidden document and resumes from a fresh baseline", () => {
+    let hidden = false;
+    vi.spyOn(document, "hidden", "get").mockImplementation(() => hidden);
+    const textarea = document.querySelector<HTMLTextAreaElement>("textarea")!;
+    textarea.value = "anna.test@example.com";
+    textarea.dispatchEvent(new Event("input", { bubbles: true }));
+    noticeMock.unmount.mockClear();
+    noticeMock.showReady.mockClear();
+
+    hidden = true;
+    document.dispatchEvent(new Event("visibilitychange"));
+    expect(noticeMock.unmount).toHaveBeenCalledOnce();
+
+    hidden = false;
+    document.dispatchEvent(new Event("visibilitychange"));
+    expect(noticeMock.showReady).toHaveBeenLastCalledWith(textarea, 1, true);
+  });
+
+  it("does not accept panel commands before the panel view confirms visibility", () => {
+    const textarea = document.querySelector<HTMLTextAreaElement>("textarea")!;
+    textarea.value = "anna.test@example.com";
+    const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
+    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    const snapshot = snapshots(panel).at(-1)!;
+
+    panel.fireMessage({
+      type: "MASK_DETECTIONS",
+      sessionId: snapshot.sessionId,
+      revision: snapshot.revision,
+      detectionIds: snapshot.detections.map(({ id }) => id),
+    });
+
+    expect(textarea.value).toBe("anna.test@example.com");
+    panel.fireMessage(PANEL_VIEW_READY);
+  });
+
+  it("keeps page controls hidden until a live panel port closes", () => {
+    const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
+    connectPanel(panel);
+    noticeMock.setPanelVisible.mockClear();
+
+    onRuntimeMessage.listener?.(
+      {
+        type: "PROMPT_MASK_PANEL_VISIBILITY",
+        state: "CLOSED",
+        url: "https://chatgpt.com/c/private",
+      },
+      { id: runtimeId },
+    );
+    expect(noticeMock.setPanelVisible).not.toHaveBeenCalled();
+
+    onRuntimeMessage.listener?.(
+      { type: "PROMPT_MASK_PANEL_VISIBILITY", state: "CLOSED" },
+      { id: runtimeId },
+    );
+    expect(noticeMock.setPanelVisible).not.toHaveBeenCalled();
+
+    panel.fireDisconnect();
+    expect(noticeMock.setPanelVisible).toHaveBeenLastCalledWith(false);
+  });
+
+  it("does not grant manual actions from a visibility signal without a panel port", () => {
+    const textarea = document.querySelector<HTMLTextAreaElement>("textarea")!;
+    textarea.value = "syntetyczny fragment";
+
+    onRuntimeMessage.listener?.(
+      { type: "PROMPT_MASK_PANEL_VISIBILITY", state: "OPEN" },
+      { id: runtimeId },
+    );
+    selectTextareaRange(textarea, 0, 11);
+
+    expect(document.querySelector("#prompt-mask-manual-shortcut")).toBeNull();
+  });
+
+  it("restores a confirmed open-panel interaction after a fresh page resume", () => {
+    let hidden = false;
+    vi.spyOn(document, "hidden", "get").mockImplementation(() => hidden);
+    const textarea = document.querySelector<HTMLTextAreaElement>("textarea")!;
+    textarea.value = "syntetyczny fragment";
+    const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
+    connectPanel(panel);
+
+    hidden = true;
+    document.dispatchEvent(new Event("visibilitychange"));
+    hidden = false;
+    document.dispatchEvent(new Event("visibilitychange"));
+    panel.postMessage.mockClear();
+    selectTextareaRange(textarea, 0, 11);
+
+    expect(selectionStates(panel).at(-1)).toEqual({
+      type: "SELECTION_STATE",
+      state: "READY",
+      selectionId: expect.any(Number),
+    });
+  });
+
   it("reports local findings without forwarding the raw draft", () => {
     const textarea = document.querySelector<HTMLTextAreaElement>("textarea")!;
     textarea.value = "PESEL 02070803628, anna.test@example.com, +48 500 600 700";
     const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
 
-    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    connectPanel(panel);
 
     const snapshot = snapshots(panel).at(-1);
     expect(snapshot?.detections.map(({ kind }) => kind)).toEqual([
@@ -170,7 +321,7 @@ describe("native composer analysis", () => {
     const original = "email=ada.one@example.net; status=422";
     textarea.value = original;
     const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
-    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    connectPanel(panel);
     const snapshot = snapshots(panel).at(-1)!;
 
     expect(snapshot.detections).toEqual([
@@ -202,7 +353,7 @@ describe("native composer analysis", () => {
     textarea.value =
       '{"patientName":"Żaneta Próba","patientFirstName":"Iga","patientLastName":"Modelowa","patientId":"PT-Z19-44","password":"P@ss-demo-7!Q","error":"E_17"}';
     const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
-    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    connectPanel(panel);
     const snapshot = snapshots(panel).at(-1)!;
 
     expect(snapshot.detections.map(({ kind }) => kind)).toEqual([
@@ -245,7 +396,7 @@ describe("native composer analysis", () => {
       "client_secret=demo-client-Z8x!; Authorization: Bearer demo.jwt.token-7X";
     textarea.value = original;
     const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
-    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    connectPanel(panel);
     const snapshot = snapshots(panel).at(-1)!;
 
     expect(snapshot.detections).toEqual([
@@ -284,7 +435,7 @@ describe("native composer analysis", () => {
       'curl -H "Authorization: Bearer demo.jwt.token-7X" https://example.invalid';
     textarea.value = original;
     const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
-    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    connectPanel(panel);
     const snapshot = snapshots(panel).at(-1)!;
 
     expect(snapshot.detections).toEqual([
@@ -318,7 +469,7 @@ describe("native composer analysis", () => {
     const original = "email=qa=demo@example.com status=422";
     textarea.value = original;
     const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
-    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    connectPanel(panel);
     const snapshot = snapshots(panel).at(-1)!;
 
     expect(snapshot.detections).toEqual([
@@ -353,7 +504,7 @@ describe("native composer analysis", () => {
     ].join("\n");
     textarea.value = original;
     const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
-    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    connectPanel(panel);
     const snapshot = snapshots(panel).at(-1)!;
 
     expect(snapshot.detections.map(({ kind }) => kind)).toEqual([
@@ -391,7 +542,7 @@ describe("native composer analysis", () => {
     ].join("\n");
     textarea.value = original;
     const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
-    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    connectPanel(panel);
     const snapshot = snapshots(panel).at(-1)!;
 
     expect(snapshot.detections.map(({ kind }) => kind)).toEqual([
@@ -433,7 +584,7 @@ describe("native composer analysis", () => {
     const original = '{"password":"demo:02070803628:tail"}';
     textarea.value = original;
     const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
-    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    connectPanel(panel);
     const snapshot = snapshots(panel).at(-1)!;
 
     expect(snapshot.detections).toEqual([
@@ -468,7 +619,7 @@ describe("native composer analysis", () => {
     const original = "password=Tmp!Pass-44; status=401";
     textarea.value = original;
     const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
-    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    connectPanel(panel);
     const snapshot = snapshots(panel).at(-1)!;
 
     expect(snapshot.detections).toEqual([
@@ -501,7 +652,7 @@ describe("native composer analysis", () => {
   it("rescans the native field after a user input event", () => {
     const textarea = document.querySelector<HTMLTextAreaElement>("textarea")!;
     const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
-    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    connectPanel(panel);
 
     textarea.value = "Kontakt anna.test@example.com";
     textarea.dispatchEvent(new InputEvent("input", { bubbles: true }));
@@ -515,7 +666,7 @@ describe("native composer analysis", () => {
     const original = document.querySelector<HTMLTextAreaElement>("textarea")!;
     original.value = "Kontakt anna.test@example.com";
     const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
-    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    connectPanel(panel);
     const previousEventCount = panel.postMessage.mock.calls.length;
 
     const replacement = document.createElement("textarea");
@@ -542,7 +693,7 @@ describe("native composer analysis", () => {
     const original = document.querySelector<HTMLTextAreaElement>("textarea")!;
     original.value = "500600700";
     const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
-    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    connectPanel(panel);
     const previous = snapshots(panel).at(-1)!;
     const delayedCommand = {
       type: "MASK_DETECTIONS",
@@ -578,7 +729,7 @@ describe("native composer analysis", () => {
     const textarea = document.querySelector<HTMLTextAreaElement>("textarea")!;
     textarea.value = "500600700";
     const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
-    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    connectPanel(panel);
     const previous = snapshots(panel).at(-1)!;
 
     window.history.pushState({}, "", "/c/next-synthetic-conversation");
@@ -606,14 +757,14 @@ describe("native composer analysis", () => {
     const firstPanel = createPort(
       `chrome-extension://${runtimeId}/side-panel.html`,
     );
-    onConnect.listener?.(firstPanel as unknown as chrome.runtime.Port);
+    connectPanel(firstPanel);
     const previous = snapshots(firstPanel).at(-1)!;
     firstPanel.fireDisconnect();
 
     const reconnectedPanel = createPort(
       `chrome-extension://${runtimeId}/side-panel.html`,
     );
-    onConnect.listener?.(reconnectedPanel as unknown as chrome.runtime.Port);
+    connectPanel(reconnectedPanel);
     const current = snapshots(reconnectedPanel).at(-1)!;
     reconnectedPanel.fireMessage({
       type: "MASK_DETECTIONS",
@@ -635,7 +786,7 @@ describe("native composer analysis", () => {
     const textarea = document.querySelector<HTMLTextAreaElement>("textarea")!;
     textarea.value = "Kontakt anna.test@example.com lub +48 500 600 700";
     const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
-    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    connectPanel(panel);
     const snapshot = snapshots(panel).at(-1)!;
     const email = snapshot.detections.find(({ kind }) => kind === "EMAIL")!;
 
@@ -671,7 +822,7 @@ describe("native composer analysis", () => {
     const inputListener = vi.fn();
     textarea.addEventListener("input", inputListener);
     const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
-    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    connectPanel(panel);
     const snapshot = snapshots(panel).at(-1)!;
 
     expect(snapshot.detections).toHaveLength(4);
@@ -706,7 +857,7 @@ describe("native composer analysis", () => {
     const textarea = document.querySelector<HTMLTextAreaElement>("textarea")!;
     textarea.value = "Kontakt anna.test@example.com i 500600700";
     const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
-    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    connectPanel(panel);
     const snapshot = snapshots(panel).at(-1)!;
 
     textarea.value = "Nowy tekst z numerem 600700800";
@@ -738,7 +889,7 @@ describe("native composer analysis", () => {
     const inputListener = vi.fn();
     textarea.addEventListener("input", inputListener);
     const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
-    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    connectPanel(panel);
     const snapshot = snapshots(panel).at(-1)!;
     const partialIds = snapshot.detections.slice(0, 2).map(({ id }) => id);
 
@@ -767,7 +918,7 @@ describe("native composer analysis", () => {
     const inputListener = vi.fn();
     textarea.addEventListener("input", inputListener);
     const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
-    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    connectPanel(panel);
     const snapshot = snapshots(panel).at(-1)!;
     const command = {
       type: "MASK_DETECTIONS",
@@ -794,7 +945,7 @@ describe("native composer analysis", () => {
     const textarea = document.querySelector<HTMLTextAreaElement>("textarea")!;
     textarea.value = "PESEL 02070803628";
     const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
-    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    connectPanel(panel);
     const snapshot = snapshots(panel).at(-1)!;
 
     panel.fireMessage({
@@ -821,7 +972,7 @@ describe("native composer analysis", () => {
       "Jan Testowy zgłosił błąd. Jan Testowy czeka 🙂\nna odpowiedź.";
     textarea.value = original;
     const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
-    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    connectPanel(panel);
     textarea.focus();
     textarea.setSelectionRange(0, "Jan Testowy".length);
     textarea.dispatchEvent(new PointerEvent("pointerup", { bubbles: true }));
@@ -896,7 +1047,7 @@ describe("native composer analysis", () => {
     const editable = document.querySelector<HTMLElement>("#prompt-textarea")!;
     const originalHtml = editable.innerHTML;
     const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
-    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    connectPanel(panel);
     const range = document.createRange();
     range.selectNodeContents(editable.firstElementChild!);
     const domSelection = window.getSelection()!;
@@ -934,7 +1085,7 @@ describe("native composer analysis", () => {
     const editable = document.querySelector<HTMLElement>("#prompt-textarea")!;
     const originalHtml = editable.innerHTML;
     const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
-    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    connectPanel(panel);
     const range = document.createRange();
     range.setStart(editable.children[0]!.firstChild!, 4);
     range.setEnd(editable.children[1]!.firstChild!, 4);
@@ -970,7 +1121,7 @@ describe("native composer analysis", () => {
     const editable = document.querySelector<HTMLElement>("#prompt-textarea")!;
     const originalHtml = editable.innerHTML;
     const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
-    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    connectPanel(panel);
     const snapshot = snapshots(panel).at(-1)!;
 
     panel.fireMessage({
@@ -1005,7 +1156,7 @@ describe("native composer analysis", () => {
     )!;
     const actual = document.querySelector<HTMLTextAreaElement>("#actual-editor")!;
     const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
-    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    connectPanel(panel);
     const snapshot = snapshots(panel).at(-1)!;
 
     panel.fireMessage({
@@ -1025,7 +1176,7 @@ describe("native composer analysis", () => {
     const original = "Klient Testowy czeka";
     textarea.value = original;
     const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
-    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    connectPanel(panel);
     selectTextareaRange(textarea, 0, "Klient Testowy".length);
     const selection = selectionStates(panel).at(-1);
     if (selection?.state !== "READY") throw new Error("Expected selection");
@@ -1053,7 +1204,7 @@ describe("native composer analysis", () => {
       '<div id="prompt-textarea" contenteditable="true" role="textbox"><p>Jan Testowy</p><p>Opis</p></div>';
     const editable = document.querySelector<HTMLElement>("#prompt-textarea")!;
     const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
-    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    connectPanel(panel);
     const range = document.createRange();
     range.selectNodeContents(editable.firstElementChild!);
     const domSelection = window.getSelection()!;
@@ -1086,7 +1237,7 @@ describe("native composer analysis", () => {
     const textarea = document.querySelector<HTMLTextAreaElement>("textarea")!;
     textarea.value = "  [EMAIL_1] [JSON]";
     const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
-    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    connectPanel(panel);
 
     selectTextareaRange(textarea, 0, 2);
     expect(selectionStates(panel)).toHaveLength(0);
@@ -1122,7 +1273,7 @@ describe("native composer analysis", () => {
     const textarea = document.querySelector<HTMLTextAreaElement>("textarea")!;
     textarea.value = "Klient Testowy czeka";
     const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
-    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    connectPanel(panel);
     selectTextareaRange(textarea, 0, "Klient Testowy".length);
     const selection = selectionStates(panel).at(-1);
     if (selection?.state !== "READY") throw new Error("Expected selection");
@@ -1155,7 +1306,7 @@ describe("native composer analysis", () => {
     const inputListener = vi.fn();
     textarea.addEventListener("input", inputListener);
     const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
-    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    connectPanel(panel);
     selectTextareaRange(textarea, 0, 1);
     const selection = selectionStates(panel).at(-1);
     if (selection?.state !== "READY") throw new Error("Expected selection");
@@ -1177,7 +1328,7 @@ describe("native composer analysis", () => {
     const textarea = document.querySelector<HTMLTextAreaElement>("textarea")!;
     textarea.value = "Klient Testowy anna.test@example.com";
     const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
-    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    connectPanel(panel);
     const snapshot = snapshots(panel).at(-1)!;
     selectTextareaRange(textarea, 0, "Klient Testowy".length);
     const selection = selectionStates(panel).at(-1);
@@ -1217,7 +1368,7 @@ describe("native composer analysis", () => {
     const inputListener = vi.fn();
     textarea.addEventListener("input", inputListener);
     const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
-    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    connectPanel(panel);
     const initial = snapshots(panel).at(-1)!;
     const email = initial.detections.find(({ kind }) => kind === "EMAIL")!;
 
@@ -1251,7 +1402,7 @@ describe("native composer analysis", () => {
     const original = "E-mail anna.test@example.com, telefon 500600700";
     textarea.value = original;
     const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
-    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    connectPanel(panel);
     const initial = snapshots(panel).at(-1)!;
 
     panel.fireMessage({
@@ -1273,7 +1424,7 @@ describe("native composer analysis", () => {
     const textarea = document.querySelector<HTMLTextAreaElement>("textarea")!;
     textarea.value = "anna.test@example.com 500600700";
     const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
-    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    connectPanel(panel);
     const initial = snapshots(panel).at(-1)!;
     const email = initial.detections.find(({ kind }) => kind === "EMAIL")!;
 
@@ -1307,7 +1458,7 @@ describe("native composer analysis", () => {
     const textarea = document.querySelector<HTMLTextAreaElement>("textarea")!;
     textarea.value = "Kontakt anna.test@example.com";
     const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
-    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    connectPanel(panel);
     const initial = snapshots(panel).at(-1)!;
     panel.fireMessage({
       type: "MASK_DETECTIONS",
@@ -1343,7 +1494,7 @@ describe("native composer analysis", () => {
       '<div id="prompt-textarea" contenteditable="true" role="textbox"><p>Kontakt anna.test@example.com</p><p>Opis</p></div>';
     const editable = document.querySelector<HTMLElement>("#prompt-textarea")!;
     const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
-    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    connectPanel(panel);
     const initial = snapshots(panel).at(-1)!;
     panel.fireMessage({
       type: "MASK_DETECTIONS",
@@ -1372,7 +1523,7 @@ describe("native composer analysis", () => {
       '<div id="prompt-textarea" contenteditable="true" role="textbox"><p>Kontakt anna.test@example.com</p><p>Opis</p></div>';
     const editable = document.querySelector<HTMLElement>("#prompt-textarea")!;
     const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
-    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    connectPanel(panel);
     const initial = snapshots(panel).at(-1)!;
     editable.addEventListener(
       "input",
@@ -1404,7 +1555,7 @@ describe("native composer analysis", () => {
       '<div id="prompt-textarea" contenteditable="true" role="textbox"><p>Kontakt audit@example.com</p><p>Opis przypadku testowego</p></div>';
     const editable = document.querySelector<HTMLElement>("#prompt-textarea")!;
     const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
-    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    connectPanel(panel);
     const initial = snapshots(panel).at(-1)!;
     editable.addEventListener(
       "input",
@@ -1470,7 +1621,7 @@ describe("native composer analysis", () => {
       '<div id="prompt-textarea" contenteditable="true" role="textbox"><p>Kontakt audit@example.com i 500600700</p><p>Opis przypadku testowego</p></div>';
     const editable = document.querySelector<HTMLElement>("#prompt-textarea")!;
     const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
-    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    connectPanel(panel);
     const initial = snapshots(panel).at(-1)!;
     editable.addEventListener(
       "input",
@@ -1500,7 +1651,7 @@ describe("native composer analysis", () => {
       '<div id="prompt-textarea" contenteditable="true" role="textbox"><p>Kontakt audit@example.com</p><p>Opis przypadku testowego</p></div>';
     const editable = document.querySelector<HTMLElement>("#prompt-textarea")!;
     const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
-    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    connectPanel(panel);
     const initial = snapshots(panel).at(-1)!;
     const nativeGetComputedStyle = window.getComputedStyle.bind(window);
     const getComputedStyle = vi
@@ -1541,7 +1692,7 @@ describe("native composer analysis", () => {
       '<div id="prompt-textarea" contenteditable="true" role="textbox"><p>Klient Testowy</p><p>Opis przypadku testowego</p></div>';
     const editable = document.querySelector<HTMLElement>("#prompt-textarea")!;
     const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
-    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    connectPanel(panel);
     const range = document.createRange();
     range.selectNodeContents(editable.firstElementChild!);
     const domSelection = window.getSelection()!;
@@ -1589,7 +1740,7 @@ describe("native composer analysis", () => {
     const textarea = document.querySelector<HTMLTextAreaElement>("textarea")!;
     textarea.value = "Kontakt anna.test@example.com";
     const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
-    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    connectPanel(panel);
     const initial = snapshots(panel).at(-1)!;
     panel.fireMessage({
       type: "MASK_DETECTIONS",
@@ -1615,7 +1766,7 @@ describe("native composer analysis", () => {
     const textarea = document.querySelector<HTMLTextAreaElement>("textarea")!;
     textarea.value = "Kontakt anna.test@example.com";
     const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
-    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    connectPanel(panel);
     const initial = snapshots(panel).at(-1)!;
     panel.fireMessage({
       type: "MASK_DETECTIONS",
@@ -1642,7 +1793,7 @@ describe("native composer analysis", () => {
     const original = document.querySelector<HTMLTextAreaElement>("textarea")!;
     original.value = "Kontakt anna.test@example.com";
     const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
-    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    connectPanel(panel);
     const initial = snapshots(panel).at(-1)!;
     panel.fireMessage({
       type: "MASK_DETECTIONS",
@@ -1673,7 +1824,7 @@ describe("native composer analysis", () => {
     const textarea = document.querySelector<HTMLTextAreaElement>("textarea")!;
     textarea.value = "Kontakt anna.test@example.com";
     const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
-    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    connectPanel(panel);
     const initial = snapshots(panel).at(-1)!;
     panel.fireMessage({
       type: "MASK_DETECTIONS",
@@ -1702,7 +1853,7 @@ describe("native composer analysis", () => {
       '<div id="prompt-textarea" contenteditable="true" role="textbox"><p>Kontakt audit@example.com</p><p>Opis przypadku testowego</p></div>';
     const editable = document.querySelector<HTMLElement>("#prompt-textarea")!;
     const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
-    onConnect.listener?.(panel as unknown as chrome.runtime.Port);
+    connectPanel(panel);
     const initial = snapshots(panel).at(-1)!;
     panel.fireMessage({
       type: "MASK_DETECTIONS",
@@ -1761,7 +1912,7 @@ describe("native composer analysis", () => {
     const firstPanel = createPort(
       `chrome-extension://${runtimeId}/side-panel.html`,
     );
-    onConnect.listener?.(firstPanel as unknown as chrome.runtime.Port);
+    connectPanel(firstPanel);
     const initial = snapshots(firstPanel).at(-1)!;
     firstPanel.fireMessage({
       type: "MASK_DETECTIONS",
@@ -1776,7 +1927,7 @@ describe("native composer analysis", () => {
     const reconnectedPanel = createPort(
       `chrome-extension://${runtimeId}/side-panel.html`,
     );
-    onConnect.listener?.(reconnectedPanel as unknown as chrome.runtime.Port);
+    connectPanel(reconnectedPanel);
     reconnectedPanel.fireMessage({
       type: "UNDO_MASK",
       operationId: result.undoOperationId,

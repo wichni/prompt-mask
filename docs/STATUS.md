@@ -5,10 +5,16 @@ Wersja manifestu: `0.1.0`
 
 ## Działa obecnie
 
-- panel boczny Manifest V3 z React i TypeScript,
-- obserwacja natywnego edytora ChatGPT bez dodatkowego pola; jedynym elementem
-  pomocniczym na stronie jest mała kontrolka `[•••]` przy edytorze,
-- lokalna analiza tekstu podczas pisania,
+- panel boczny Manifest V3 z React i TypeScript, z akcją „Schowaj” korzystającą
+  z natywnego zamknięcia globalnego panelu,
+- obserwacja natywnego edytora ChatGPT bez dodatkowego pola; przy schowanym
+  panelu strona otrzymuje mały responsywny licznik i ograniczony dymek,
+  kotwiczone przy edytorze i mieszczące się w bieżącym viewporcie, a `[•••]`
+  pozostaje dostępne wyłącznie przy otwartym panelu,
+- lokalna analiza tekstu podczas pisania działa na widocznej obsługiwanej karcie
+  również wtedy, gdy panel nigdy nie został otwarty albo jest schowany,
+- pauza i świeże wznowienie po `visibilitychange`, `pagehide` i `pageshow`, z
+  anulowaniem observera, RAF, timerów, zaznaczenia, cofania i starej sesji,
 - detekcja samodzielnego PESEL-u z poprawną datą i sumą kontrolną oraz
   dokładnie 11 cyfr ASCII w jawnym polu `pesel` niezależnie od wyniku
   walidacji; etykieta określa przesłankę ochrony, nie poprawność numeru,
@@ -27,6 +33,10 @@ Wersja manifestu: `0.1.0`
 - lista propozycji z ikoną typu, nazwą i wyłącznie częściowo ukrytym podglądem,
 - kompaktowy biało-niebieski panel z nazwą ChatGPT, licznikiem blisko góry i
   komunikatem operacji zajmującym miejsce tylko wtedy, gdy istnieje,
+- dymek wyłącznie z liczbą wykryć, debounce 700 ms, ograniczeniem do jednego
+  nowego dymka na 10 sekund, automatycznym ukryciem i obsługą Escape/hover/fokusu,
+- fokus po operacji związany z konkretną sesją i przyciskiem; zmiana celu,
+  kontekstu, widoczności lub operacja uruchomiona przez `[•••]` anuluje żądanie,
 - uczciwe rozróżnienie łączenia, pustego szkicu, tekstu bez wykryć, trwającej
   operacji i błędu; podczas operacji stara lista nie jest pokazywana jako
   aktualny wynik,
@@ -97,11 +107,17 @@ treści. Aktualna funkcja pomaga użytkownikowi zauważyć i zmienić dane przed
 
 - `npm run typecheck` — zaliczony,
 - `npm run test:medical` — zaliczone testy: 19/19,
-- `npm test -- tests/content-script.test.ts` — zaliczone testy: 49/49 bez
+- `npm test -- tests/content-script.test.ts` — zaliczone testy: 53/53 bez
   timeoutu po zwolnieniu portów i nasłuchów każdej instancji testowej,
-- `npm test` — zaliczone testy: 282/282 w 13 plikach,
+- `npm test` — zaliczone testy: 313/313 w 19 plikach,
 - `npm run build` — zaliczony; manifest nie publikuje już zasobów dodatkowego
   pola, a content script pozostaje samodzielnym bundłem,
+- testy BG-001 obejmują analizę bez panelu, pauzę i świeże wznowienie, ścisłe
+  sygnały widoczności, odrzucenie komendy przed potwierdzeniem panelu, routing
+  dwóch okien, otwarcie przy braku opcjonalnego `sender.tab.url`, odrzucone
+  `open()`/`close()`, licznik i dymek bez surowych danych, debounce/cooldown oraz
+  anulowanie spóźnionego fokusu; pozycjonowanie ma regresje dla szerokiego,
+  wąskiego i bardzo małego viewportu oraz zmiany rozmiaru okna,
 - testy MED-002/MED-003/MED-004 obejmują dokładne zakresy JSON i
   `klucz=wartość`,
   odrzucenie swobodnego tekstu, niecytowanej nazwy, aliasów, wartości z
@@ -158,16 +174,16 @@ treści. Aktualna funkcja pomaga użytkownikowi zauważyć i zmienić dane przed
 
 ## CI
 
-- Workflow `CI`, job `Verify`, dla bazy UI-001
-  `37768226de4ddb9e359616176b7fa503cc714adc` zakończył się powodzeniem:
-  [run 34813357958](https://github.com/wichni/prompt-mask/actions/runs/34813357958).
-  Typecheck, testy 280/280 i build przeszły. Przebieg obejmuje poprawkę
-  MED-006A, ale nie obejmuje roboczych zmian UI-001.
+- Workflow `CI` dla UI-001 na `main`, SHA
+  `140c9ad9f6b5b3a7e8daf41916ec692eecfd5847`, zakończył się powodzeniem:
+  [run 34821116452](https://github.com/wichni/prompt-mask/actions/runs/34821116452).
+  Run potwierdza typecheck, testy 282/282 i build tej rewizji.
 - Workflow obejmuje też pull requesty do `main` i uruchomienie ręczne. Zielony
   run nie jest dowodem wymaganej blokady scalania; w czasie przeglądu API GitHub
   zwracało dla `main` `protected: false`. Zmiany administracyjne repozytorium
   pozostają poza tym etapem.
-- Dla UI-001 zdalne CI oczekuje na autoryzowaną publikację nowej rewizji.
+- Dla roboczego BG-001 zdalne CI oczekuje na autoryzowaną publikację nowej
+  rewizji.
 
 ## Pomiar MED-001 po MED-006
 
@@ -214,6 +230,15 @@ potwierdził w Chrome, że zgłoszony brak pola już nie występuje. To potwierd
 rozpoznanie edytora, ale nie zastępuje pełnego odbioru maskowania i cofania.
 F5 ma dowód automatyczny na atrapie DOM. Ręczny odbiór zwykłego maskowania i
 cofania po tej zmianie nie został wykonany ani w Chrome, ani w Edge.
+Zrzut użytkownika z 14.09.2026 potwierdza analizę w tle i licznik trzech wykryć,
+ale ujawnił odmowę otwarcia panelu z kontrolki strony. Worker wymagał
+opcjonalnego `sender.tab.url`, którego kontrakt Chrome nie gwarantuje. Regresja
+automatyczna obejmuje teraz prawidłowego nadawcę bez tej metadanej; ręczne
+potwierdzenie otwarcia po poprawce nadal oczekuje.
+Kolejny zrzut z 14.09.2026 potwierdza licznik przy edytorze na szerokim
+viewporcie przed korektą pozycji. Po poprawce licznik jest wyrównywany do prawej
+krawędzi edytora z odstępem 4 px, a dymek przechodzi pod pole i zmienia układ na
+węższym ekranie. Ręczny odbiór tych wariantów nadal oczekuje.
 Zrzuty użytkownika z 15:25 pokazują stan sprzed MED-002: brak wykrycia
 `patientName` oraz tylko istniejące wykrycie e-maila. Nie są dowodem działania
 nowych kategorii; po buildzie i przeładowaniu rozszerzenia wymagają ponownego
@@ -240,10 +265,13 @@ cofnięcie nie zostały jeszcze odebrane ręcznie w Chrome ani Edge.
 Użytkownik zgłosił po MED-006A, że rozszerzenie działa w Chrome. Zgłoszenie nie
 zawiera wersji przeglądarki ani systemu i nie zastępuje pełnego odbioru
 scenariuszy MED-006 lub UI-001; Edge nadal nie ma zgłoszonego odbioru.
-Roboczy UI-001 sprawdzono na lokalnym renderze właściwych komponentów przy
-szerokościach 280, 360 i 480 px. Dla każdej szerokości `scrollWidth` odpowiadał
-`clientWidth`; osobno obejrzano listę, brak wykryć, potwierdzenie z „Cofnij” i
-błąd integracji. To nie jest odbiór rozszerzenia na prawdziwej stronie.
+Użytkownik zgłosił, że UI-001 został wgrany do `main` i przetestowany; wcześniej
+potwierdził działanie w Chrome. Zgłoszenie nie zawiera wersji przeglądarki ani
+systemu, zakresu wykonanych scenariuszy ani odbioru Edge. UI-001 ma też zielone
+CI dokładnej rewizji `140c9ad9f6b5b3a7e8daf41916ec692eecfd5847`.
+BG-001 ma obecnie wyłącznie dowody automatyczne z atrap DOM i API. Nie wykonano
+jeszcze natywnej ścieżki licznik → otwarcie → Schowaj/X → ponowne otwarcie,
+restartu workera ani odbioru fokusu na prawdziwej stronie w Chrome lub Edge.
 
 ## Wymagany odbiór użytkownika
 
@@ -253,8 +281,10 @@ maskowanie, stabilność panelu, brak automatycznego wysłania i poprawną reakc
 po zmianie szkicu. Dla ręcznego wyboru trzeba sprawdzić drugi identyczny
 fragment, oba kierunki, przejście fokusu, Unicode i wiele wierszy, odmowę dla
 oznaczenia, wszystkie warunki wygaśnięcia oraz pozycję, fokus i zachowanie
-kontrolki `[•••]`. Dla cofania trzeba dodatkowo potwierdzić pojedynczą, zbiorczą
-i ręczną operację, wygaśnięcie po edycji i wysłaniu oraz zmianę rozmowy.
+kontrolki `[•••]`. Dla licznika i dymka trzeba potwierdzić szeroki i wąski
+viewport, zmianę rozmiaru okna oraz przejście pod edytor przy braku miejsca nad
+nim. Dla cofania trzeba dodatkowo potwierdzić pojedynczą, zbiorczą i ręczną
+operację, wygaśnięcie po edycji i wysłaniu oraz zmianę rozmowy.
 
 ## Dokumentacja projektu
 
@@ -268,10 +298,10 @@ uszkodzonych celów.
 
 ## Bieżący etap
 
-UI-001 jest w stanie roboczym na bazie
-`37768226de4ddb9e359616176b7fa503cc714adc`. Zmienia kompozycję i style panelu,
-stany puste, prezentację trwającej operacji, dostępne nazwy akcji oraz powrót
-fokusu po zakończeniu operacji. Nie zmienia detektorów, protokołu, maskowania,
-cofania ani przepływu danych. Lokalnie zaliczono typecheck, pełne 282/282,
-build, kontrolę diffu i kontrolę renderu 280/360/480 px. Zdalne CI UI-001 oraz
-ręczny odbiór panelu w Chrome i Edge oczekują.
+BG-001 jest w stanie roboczym na bazie UI-001
+`140c9ad9f6b5b3a7e8daf41916ec692eecfd5847`. Rozdziela aktywność analizy od
+widoczności panelu, dodaje licznik, ograniczony dymek, natywne „Schowaj”, ścisły
+routing workera i poprawkę spóźnionego fokusu. Nie zmienia detektorów, reguł
+maskowania ani uprawnień; podnosi minimum Chrome do 142. Lokalnie zaliczono
+typecheck, pełne 313/313, build i kontrolę diffu. Zdalne CI BG-001 oraz ręczny
+odbiór w Chrome i Edge oczekują.

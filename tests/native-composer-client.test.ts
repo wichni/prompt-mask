@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { PanelEvent } from "../src/platform/chromium/messages";
+import { PANEL_VIEW_READY } from "../src/platform/chromium/side-panel-signals";
 import { watchNativeComposer } from "../src/app/native-composer-client";
 
 afterEach(() => {
@@ -48,6 +49,7 @@ describe("native composer client", () => {
 
     const session = watchNativeComposer((event) => events.push(event));
     await vi.waitFor(() => expect(disconnectListener).toBeTypeOf("function"));
+    expect(port.postMessage).toHaveBeenCalledWith(PANEL_VIEW_READY);
     disconnectListener?.();
 
     expect(lastErrorRead).toHaveBeenCalledOnce();

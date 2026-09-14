@@ -23,7 +23,7 @@ otrzyma surowego tekstu”.
 | strona ChatGPT | tak | tak | właściciel natywnego DOM |
 | content script | tak, w pamięci | tak, w pamięci | analiza, podmiana, tymczasowy rekord zaznaczenia i jeden rekord cofania |
 | panel rozszerzenia | nie | nie | typ, ukryty podgląd i decyzja |
-| service worker | nie | nie | otwieranie panelu |
+| service worker | nie | nie | otwieranie i sygnały widoczności panelu |
 | storage | nie | nie | obecnie nieużywany |
 
 Content script nie loguje ani nie przekazuje surowego szkicu. Panel otrzymuje
@@ -38,8 +38,9 @@ trafiają do trwałego magazynu.
 ```text
 natywny edytor ChatGPT
   → lokalne detektory w content scripcie
-  → ukryte podglądy w panelu
-  → decyzja użytkownika z listą id, sesją szkicu i wersją
+    ├→ liczba w kontrolce strony przy schowanym panelu
+    └→ ukryte podglądy w panelu
+       → decyzja użytkownika z listą id, sesją szkicu i wersją
   → walidacja aktualnego tekstu i wszystkich wybranych zakresów
   → jedna operacja adaptera: natywny zapis textarea albo zakresowe zmiany DOM
   → opcjonalne cofnięcie po ponownej walidacji tego samego, niezmienionego szkicu
@@ -57,6 +58,19 @@ atrybutach DOM. Style i przycisk są w zamkniętym Shadow DOM, a obsługa odrzuc
 programowe zdarzenia bez `isTrusted`. Strona nadal może zauważyć host kontrolki,
 ukryć go, usunąć lub imitować jego wygląd, dlatego ikonka nie jest wskaźnikiem
 zaufania ani granicą bezpieczeństwa. Pełna kontrolka w panelu pozostaje dostępna.
+
+Przy schowanym panelu content script dodaje osobny licznik i dymek w zamkniętym
+Shadow DOM. Zawierają wyłącznie bieżącą liczbę, stałe teksty i natywne
+przyciski; nie zawierają szkicu, podglądów, typów wykryć, identyfikatorów ani
+URL. Aktywacja wymaga `isTrusted`. Strona może host ukryć, usunąć lub imitować,
+więc licznik również nie jest kontrolką bezpieczeństwa.
+
+Analiza działa tylko w widocznym dokumencie ChatGPT. `visibilitychange` i
+`pagehide` zatrzymują observer, anulują RAF i timery, usuwają kontrolki oraz
+unieważniają szkic, zaznaczenie i cofanie. `pageshow` i powrót do karty tworzą
+świeży punkt odniesienia bez ponowienia starego dymka. Uśpienie service workera
+nie zatrzymuje analizy: worker nie przechowuje wyników, map ani stanu szkicu i
+nie jest utrzymywany przy życiu.
 
 ## Reguły modyfikacji
 
@@ -90,7 +104,8 @@ Cofnięcie nie zachodzi, gdy rekord nie jest bieżący, tekst nie jest dokładni
 oczekiwanym wynikiem maskowania, zmieniła się rewizja lub generacja szkicu,
 aktywny jest inny dokument, URL albo element edytora lub trwa inna operacja.
 Pierwsza niezależna edycja, wysłanie formularza, zmiana kontekstu, utrata pola,
-rozłączenie content scriptu albo niepewny zapis bezpowrotnie usuwa rekord.
+schowanie lub rozłączenie panelu, rozłączenie content scriptu albo niepewny
+zapis bezpowrotnie usuwa rekord.
 Powrót do identycznego ciągu znaków nie odtwarza możliwości cofnięcia.
 
 Błąd promptMask nie blokuje natywnego interfejsu ChatGPT. Użytkownik nadal może
@@ -102,6 +117,9 @@ wysłać surowy tekst, dlatego UI nie może sugerować pełnej ochrony.
 | --- | --- |
 | XSS przez wykrytą wartość | React i operacje na węzłach tekstowych; `innerHTML` jest wyłącznie odczytywany jako lokalna sygnatura struktury, nigdy przypisywany ani wykonywany |
 | wyciek przez komunikat | ścisłe typy `unknown`; panel dostaje tylko ukryty podgląd |
+| przejęcie routingu otwarcia panelu | worker sprawdza `sender.id`, kartę nadawcy, główną ramkę i dokładny origin dokumentu oraz — jeśli Chrome go udostępnia — URL karty; `windowId` bierze z kontekstu nadawcy, a komunikat nie przyjmuje celu |
+| wyciek przez licznik lub dymek | wyłącznie liczba i stałe teksty ustawiane przez `textContent`; brak surowych danych w DOM i komunikacie workera |
+| stary stan po ukryciu karty lub panelu | idempotentny kontroler cyklu życia, anulowanie zadań i nowa sesja przed kolejną decyzją |
 | obcy panel lub komenda | dokładny `sender.id`, URL panelu i allowlista pól |
 | użycie starej decyzji dla innego szkicu | losowy identyfikator sesji w snapshotach, komendach i wynikach; nowa sesja po zmianie pola, URL rozmowy lub ponownym połączeniu |
 | użycie starego zakresu | sesja i wersja szkicu oraz ponowne porównanie wartości zakresu |

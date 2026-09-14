@@ -20,17 +20,40 @@ import { OperationStatus } from "./OperationStatus";
 import { ManualMaskAction } from "./ManualMaskAction";
 import { ConnectionCard } from "./ConnectionCard";
 import { ReviewSection } from "./ReviewSection";
+import { useOperationFocus } from "./use-operation-focus";
+import { PanelHeader } from "./PanelHeader";
 
 export const SidePanel = () => {
   const [state, setState] = useState(INITIAL_PANEL_STATE);
   const sessionRef = useRef<NativeComposerSession | null>(null);
   const operationInFlightRef = useRef(false);
-  const focusAfterOperationRef = useRef(false);
   const reviewHeadingRef = useRef<HTMLHeadingElement>(null);
+  const detections = state.snapshot?.detections ?? [];
+  const isReady = state.host === "READY";
+  const analysisComplete = isReady && state.snapshot !== null;
+  const operationPending =
+    state.pendingMask !== null ||
+    state.pendingManualMask !== null ||
+    state.pendingUndo !== null;
+  const actionsDisabled = !analysisComplete || operationPending;
+  const operationFeedback: PanelFeedback | null =
+    state.feedback ??
+    (state.pendingMask
+      ? { tone: "INFO", message: "Maskowanie…" }
+      : state.pendingManualMask !== null
+        ? { tone: "INFO", message: "Maskowanie zaznaczenia…" }
+        : null);
+  const { cancelOperationFocus, requestOperationFocus } = useOperationFocus(
+    reviewHeadingRef,
+    operationPending,
+    operationFeedback,
+    state.snapshot?.sessionId ?? null,
+  );
 
   useEffect(() => {
     const session = watchNativeComposer((event) => {
       if (event.type === "MANUAL_MASK_STARTED") {
+        cancelOperationFocus();
         operationInFlightRef.current = true;
       } else if (
         event.type === "MASK_RESULT" ||
@@ -41,17 +64,24 @@ export const SidePanel = () => {
       ) {
         operationInFlightRef.current = false;
       }
+      if (event.type === "HOST_STATUS" && event.state !== "READY") {
+        cancelOperationFocus();
+      }
       setState((current) => reducePanelEvent(current, event));
     });
     sessionRef.current = session;
     return () => {
       operationInFlightRef.current = false;
+      cancelOperationFocus();
       sessionRef.current = null;
       session.disconnect();
     };
-  }, []);
+  }, [cancelOperationFocus]);
 
-  const sendMaskCommand = (detection: DetectionSummary | null): void => {
+  const sendMaskCommand = (
+    detection: DetectionSummary | null,
+    source: HTMLButtonElement,
+  ): void => {
     const snapshot = state.snapshot;
     if (!snapshot || state.pendingMask || operationInFlightRef.current) return;
     const detectionIds = detection
@@ -60,7 +90,7 @@ export const SidePanel = () => {
     if (detectionIds.length === 0) return;
 
     operationInFlightRef.current = true;
-    focusAfterOperationRef.current = true;
+    requestOperationFocus(source, snapshot.sessionId);
     setState((current) =>
       detection
         ? beginSingleMask(current, detection)
@@ -79,10 +109,11 @@ export const SidePanel = () => {
     }
   };
 
-  const sendUndoCommand = (): void => {
+  const sendUndoCommand = (source: HTMLButtonElement): void => {
     const operationId = state.undoOperationId;
     if (
       operationId === null ||
+      !state.snapshot ||
       state.pendingMask ||
       state.pendingManualMask !== null ||
       state.pendingUndo !== null ||
@@ -92,7 +123,7 @@ export const SidePanel = () => {
     }
 
     operationInFlightRef.current = true;
-    focusAfterOperationRef.current = true;
+    requestOperationFocus(source, state.snapshot.sessionId);
     setState(beginUndo);
     const delivered =
       sessionRef.current?.undo({ type: "UNDO_MASK", operationId }) ?? false;
@@ -102,7 +133,7 @@ export const SidePanel = () => {
     }
   };
 
-  const sendManualMaskCommand = (): void => {
+  const sendManualMaskCommand = (source: HTMLButtonElement): void => {
     const selectionId = state.selectionId;
     if (
       selectionId === null ||
@@ -115,7 +146,7 @@ export const SidePanel = () => {
       return;
     }
     operationInFlightRef.current = true;
-    focusAfterOperationRef.current = true;
+    requestOperationFocus(source, state.snapshot.sessionId);
     setState(beginManualMask);
     const delivered =
       sessionRef.current?.maskSelection({
@@ -128,38 +159,13 @@ export const SidePanel = () => {
     }
   };
 
-  const detections = state.snapshot?.detections ?? [];
-  const isReady = state.host === "READY";
-  const analysisComplete = isReady && state.snapshot !== null;
-  const operationPending =
-    state.pendingMask !== null ||
-    state.pendingManualMask !== null ||
-    state.pendingUndo !== null;
-  const actionsDisabled = !analysisComplete || operationPending;
-  const operationFeedback: PanelFeedback | null =
-    state.feedback ??
-    (state.pendingMask
-      ? { tone: "INFO", message: "Maskowanie…" }
-      : state.pendingManualMask !== null
-        ? { tone: "INFO", message: "Maskowanie zaznaczenia…" }
-        : null);
-
-  useEffect(() => {
-    if (
-      focusAfterOperationRef.current &&
-      !operationPending &&
-      operationFeedback
-    ) {
-      reviewHeadingRef.current?.focus({ preventScroll: true });
-      focusAfterOperationRef.current = false;
-    }
-  }, [operationFeedback, operationPending]);
-
   return (
     <main className="panel">
-      <header className="header">
-        <h1>promptMask</h1>
-      </header>
+      <PanelHeader
+        cancelOperationFocus={cancelOperationFocus}
+        operationPending={operationPending}
+        undoAvailable={state.undoOperationId !== null}
+      />
 
       <ConnectionCard host={state.host} message={state.hostMessage} />
 
@@ -175,7 +181,7 @@ export const SidePanel = () => {
         detections={detections}
         headingRef={reviewHeadingRef}
         length={state.snapshot?.length ?? null}
-        onMaskAll={() => sendMaskCommand(null)}
+        onMaskAll={(source) => sendMaskCommand(null, source)}
         onMaskOne={sendMaskCommand}
         operationPending={operationPending}
       />

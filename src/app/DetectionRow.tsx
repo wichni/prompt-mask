@@ -8,7 +8,7 @@ export const DetectionRow = ({
   position,
 }: {
   detection: DetectionSummary;
-  onMask: (detection: DetectionSummary) => void;
+  onMask: (detection: DetectionSummary, source: HTMLButtonElement) => void;
   position: number;
 }) => (
   <li className="detection-item">
@@ -20,7 +20,7 @@ export const DetectionRow = ({
     <button
       aria-label={`Maskuj pozycję ${position}: ${detectionLabels[detection.kind]}`}
       className="single-mask"
-      onClick={() => onMask(detection)}
+      onClick={(event) => onMask(detection, event.currentTarget)}
       type="button"
     >
       Maskuj

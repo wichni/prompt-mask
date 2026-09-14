@@ -10,6 +10,9 @@ const composerMock = vi.hoisted(() => ({
   undo: vi.fn(() => true),
   onEvent: undefined as ((event: PanelEvent) => void) | undefined,
 }));
+const sidePanelMock = vi.hoisted(() => ({
+  close: vi.fn(async () => true),
+}));
 
 vi.mock("../src/app/native-composer-client", () => ({
   watchNativeComposer: (onEvent: (event: PanelEvent) => void) => {
@@ -21,6 +24,9 @@ vi.mock("../src/app/native-composer-client", () => ({
       undo: composerMock.undo,
     };
   },
+}));
+vi.mock("../src/platform/chromium/side-panel-client", () => ({
+  closeCurrentSidePanel: sidePanelMock.close,
 }));
 
 import { SidePanel } from "../src/app/SidePanel";
@@ -45,6 +51,8 @@ beforeEach(() => {
   composerMock.undo.mockReset();
   composerMock.undo.mockReturnValue(true);
   composerMock.onEvent = undefined;
+  sidePanelMock.close.mockReset();
+  sidePanelMock.close.mockResolvedValue(true);
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
@@ -93,10 +101,11 @@ describe("side panel", () => {
     expect(container.querySelector(".review-count")?.getAttribute("aria-live")).toBe(
       "polite",
     );
-    expect(container.querySelectorAll("button")).toHaveLength(4);
+    expect(container.querySelectorAll("button")).toHaveLength(5);
     expect(
       [...container.querySelectorAll("button")].map((button) => button.textContent),
     ).toEqual([
+      "Schowaj",
       "Maskuj wszystkie (2)",
       "Maskuj",
       "Maskuj",
@@ -109,6 +118,109 @@ describe("side panel", () => {
     expect(
       container.querySelector<HTMLButtonElement>(".single-mask")?.ariaLabel,
     ).toBe("Maskuj pozycję 1: E-mail");
+  });
+
+  it("does not steal focus after the user moves to another target", () => {
+    emit({ type: "HOST_STATUS", state: "READY" });
+    emit({
+      type: "ANALYSIS_SNAPSHOT",
+      sessionId,
+      revision: 1,
+      length: 29,
+      detections: [
+        {
+          id: "EMAIL:8:29",
+          kind: "EMAIL",
+          maskedPreview: "a•••@e•••.com",
+        },
+      ],
+    });
+    act(() =>
+      container.querySelector<HTMLButtonElement>(".single-mask")?.click(),
+    );
+    const outside = document.createElement("button");
+    document.body.append(outside);
+    outside.focus();
+
+    emit({
+      type: "ANALYSIS_SNAPSHOT",
+      sessionId,
+      revision: 2,
+      length: 17,
+      detections: [],
+    });
+    emit({
+      type: "MASK_RESULT",
+      status: "SUCCESS",
+      sessionId,
+      requestRevision: 1,
+      detectionIds: ["EMAIL:8:29"],
+      resultRevision: 2,
+      remainingDetections: 0,
+      undoOperationId: 1,
+    });
+
+    expect(document.activeElement).toBe(outside);
+    outside.remove();
+  });
+
+  it("does not carry panel focus intent into a page shortcut operation", () => {
+    emit({ type: "HOST_STATUS", state: "READY" });
+    emit({
+      type: "ANALYSIS_SNAPSHOT",
+      sessionId,
+      revision: 1,
+      length: 29,
+      detections: [
+        {
+          id: "EMAIL:8:29",
+          kind: "EMAIL",
+          maskedPreview: "a•••@e•••.com",
+        },
+      ],
+    });
+    act(() =>
+      container.querySelector<HTMLButtonElement>(".single-mask")?.click(),
+    );
+    emit({ type: "HOST_STATUS", state: "SEARCHING" });
+    emit({ type: "MANUAL_MASK_STARTED", selectionId: 17 });
+    emit({ type: "HOST_STATUS", state: "READY" });
+    emit({
+      type: "ANALYSIS_SNAPSHOT",
+      sessionId: "00000000-0000-4000-8000-000000000002",
+      revision: 1,
+      length: 8,
+      detections: [],
+    });
+    emit({
+      type: "MANUAL_MASK_RESULT",
+      status: "SUCCESS",
+      selectionId: 17,
+      resultRevision: 1,
+      remainingDetections: 0,
+      undoOperationId: 2,
+    });
+
+    expect(document.activeElement).not.toBe(
+      container.querySelector("#review-heading"),
+    );
+  });
+
+  it("keeps the panel visible when native close fails", async () => {
+    sidePanelMock.close.mockResolvedValue(false);
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>(".hide-panel")?.click();
+      await Promise.resolve();
+    });
+
+    expect(sidePanelMock.close).toHaveBeenCalledOnce();
+    expect(container.querySelector(".hide-error")?.textContent).toContain(
+      "Nie udało się schować panelu",
+    );
+    expect(container.querySelector<HTMLButtonElement>(".hide-panel")?.disabled).toBe(
+      false,
+    );
   });
 
   it("shows structured patient-data categories without receiving raw values", () => {
@@ -568,6 +680,9 @@ describe("side panel", () => {
     const undo = container.querySelector<HTMLButtonElement>(".undo-mask")!;
 
     expect(undo.textContent).toBe("Cofnij");
+    expect(container.querySelector(".hide-warning")?.textContent).toBe(
+      "Schowanie kończy możliwość cofnięcia.",
+    );
     expect(undo.getAttribute("aria-label")).toBe("Cofnij ostatnie maskowanie");
     act(() => undo.click());
     expect(composerMock.undo).toHaveBeenCalledOnce();

@@ -8,6 +8,7 @@ import {
   type PanelEvent,
   type UndoCommand,
 } from "../platform/chromium/messages";
+import { PANEL_VIEW_READY } from "../platform/chromium/side-panel-signals";
 
 export interface NativeComposerSession {
   disconnect: () => void;
@@ -59,6 +60,7 @@ export const watchNativeComposer = (
         frameId: 0,
       });
       activePort = port;
+      port.postMessage(PANEL_VIEW_READY);
       port.onMessage.addListener((message: unknown) => {
         if (port === activePort && isPanelEvent(message)) onEvent(message);
       });

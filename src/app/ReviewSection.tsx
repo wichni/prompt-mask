@@ -15,8 +15,8 @@ export const ReviewSection = ({
   detections: DetectionSummary[];
   headingRef: RefObject<HTMLHeadingElement | null>;
   length: number | null;
-  onMaskAll: () => void;
-  onMaskOne: (detection: DetectionSummary) => void;
+  onMaskAll: (source: HTMLButtonElement) => void;
+  onMaskOne: (detection: DetectionSummary, source: HTMLButtonElement) => void;
   operationPending: boolean;
 }) => {
   const hasCurrentResult = analysisComplete && !operationPending;
@@ -43,7 +43,11 @@ export const ReviewSection = ({
       </div>
 
       {hasCurrentResult && detections.length > 0 && (
-        <button className="bulk-mask" onClick={onMaskAll} type="button">
+        <button
+          className="bulk-mask"
+          onClick={(event) => onMaskAll(event.currentTarget)}
+          type="button"
+        >
           Maskuj wszystkie ({detections.length})
         </button>
       )}

@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "minimum_chrome_version": "114",
+  "minimum_chrome_version": "142",
   "name": "promptMask",
   "version": "0.1.0",
   "description": "Lokalnie wykrywa i maskuje dane w tekście wpisywanym w ChatGPT.",

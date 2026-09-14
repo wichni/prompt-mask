@@ -34,14 +34,13 @@ zawsze opisany w `STATUS.md`.
 
 ## Kolejność przed pilotażem
 
-1. UI-001 porządkuje otwarty panel bez zmiany analizy i przepływu danych.
-2. Po odbiorze UI-001 osobny etap BG-001 rozdzieli cykl życia analizy od
-   otwartego panelu i doda dyskretne powiadomienie przy edytorze.
-3. Pilotaż rozpocznie się dopiero po odbiorze BG-001 oraz wymaganych scenariuszy
-   w Chrome i Edge.
+1. UI-001 uporządkował otwarty panel bez zmiany analizy i przepływu danych.
+2. BG-001 rozdziela cykl życia analizy od widoczności panelu, dodaje licznik,
+   ograniczony dymek i poprawia wiązanie fokusu z operacją.
+3. Pilotaż rozpocznie się dopiero po ręcznym odbiorze BG-001 w Chrome i Edge.
 
-BG-001 nie jest częścią UI-001. Do jego wdrożenia nie wolno dodawać atrapy
-„Schowaj” ani obiecywać analizy po zamknięciu ostatniego panelu.
+Inne czaty, dokumenty, nowe detektory i trwała historia oznaczeń pozostają w
+kolejce odrębnych etapów.
 
 ## Kierunek rozwoju detekcji
 
@@ -90,6 +89,7 @@ danych i uprawnień.
 ```text
 natywny edytor ── content script ── czyste detektory i zakresy
                          │
+                         ├── licznik i dymek przy schowanym panelu
                          ├── ukryte podglądy ── panel decyzji
                          │                         │
                          └──── zatwierdzona podmiana zakresu
@@ -129,6 +129,8 @@ rejestracji i testów, bez zmiany adaptera DOM.
 
 - TypeScript, React, Vite i Vitest; jedna paczka i jeden lockfile.
 - Manifest V3 oraz `chrome.sidePanel` dla wspólnego kodu Chrome/Edge.
+- Minimalna wersja Chrome to 142 ze względu na natywne zdarzenie zamknięcia
+  panelu; Edge zachowuje osobny odbiór kompatybilności.
 - Content script jest osobnym, samodzielnym bundłem bez importów runtime.
 - Surowy szkic znajduje się w natywnym DOM i jest lokalnie odczytywany przez
   content script. Nie jest przekazywany do panelu ani service workera.

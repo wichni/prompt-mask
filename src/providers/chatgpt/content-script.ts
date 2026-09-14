@@ -16,6 +16,11 @@ import {
   type PanelEvent,
   type UndoCommand,
 } from "../../platform/chromium/messages";
+import { requestOpenSidePanel } from "../../platform/chromium/side-panel-client";
+import {
+  isPanelViewReady,
+  isPanelVisibilitySignal,
+} from "../../platform/chromium/side-panel-signals";
 import {
   captureComposerRestorePoint,
   findNativeComposer,
@@ -37,10 +42,16 @@ import { SelectionController } from "./selection-controller";
 import { matchesSelectionDraft } from "./selection-record";
 import { ManualMaskShortcut } from "./manual-mask-shortcut";
 import { DraftSession } from "./draft-session";
+import { BackgroundNotice } from "./background-notice";
+import { ContentLifecycleController } from "./content-lifecycle";
 
 const panelPorts = new Set<chrome.runtime.Port>();
-let observer: MutationObserver | null = null;
-let scheduled = false;
+const backgroundNotice = new BackgroundNotice(requestOpenSidePanel);
+let lifecycle: ContentLifecycleController;
+let panelVisible = false;
+let panelInteractionActive = false;
+let suppressNoticeOnce = false;
+let pendingPanelClose = false;
 let composer: HTMLElement | null = null;
 let sourceUrl = "";
 const draftSession = new DraftSession(() => crypto.randomUUID());
@@ -121,7 +132,7 @@ const createSnapshot = (): AnalysisSnapshot => ({
 });
 
 const scanComposer = (): void => {
-  scheduled = false;
+  if (!lifecycle.isRunning) return;
   const nextComposer = findNativeComposer(document);
   if (!nextComposer) {
     if (composer) draftSession.startNewContext();
@@ -129,6 +140,7 @@ const scanComposer = (): void => {
     discardUndo("CONTEXT_CHANGED");
     composer = null;
     lastSnapshot = null;
+    backgroundNotice.showUnavailable(null);
     broadcast({
       type: "HOST_STATUS",
       state: "ERROR",
@@ -151,6 +163,7 @@ const scanComposer = (): void => {
     currentStructure = null;
     revision = 0;
     detections = [];
+    backgroundNotice.showSearching(nextComposer, true);
     if (hadSource) broadcast({ type: "HOST_STATUS", state: "SEARCHING" });
   }
 
@@ -159,6 +172,7 @@ const scanComposer = (): void => {
   if (nextText.length > MAX_TEXT_LENGTH) {
     if (!writeInProgress && nextText !== currentText) markIndependentChange();
     lastSnapshot = null;
+    backgroundNotice.showUnavailable(nextComposer);
     broadcast({ type: "HOST_STATUS", state: "ERROR", error: "TEXT_TOO_LONG" });
     return;
   }
@@ -181,14 +195,18 @@ const scanComposer = (): void => {
   ) {
     return;
   }
+  backgroundNotice.showReady(
+    nextComposer,
+    detections.length,
+    suppressNoticeOnce || panelVisible,
+  );
+  suppressNoticeOnce = false;
   broadcast({ type: "HOST_STATUS", state: "READY" });
   broadcast(createSnapshot());
 };
 
 const scheduleScan = (): void => {
-  if (scheduled || panelPorts.size === 0) return;
-  scheduled = true;
-  requestAnimationFrame(scanComposerSafely);
+  lifecycle.schedule();
 };
 
 const handleInput = (event: Event): void => {
@@ -264,6 +282,7 @@ const resetAfterFailedRecoveryScan = (): void => {
   revision = 0;
   detections = [];
   lastSnapshot = null;
+  backgroundNotice.showUnavailable(null);
   broadcast({
     type: "HOST_STATUS",
     state: "ERROR",
@@ -562,17 +581,21 @@ const undoMasking = (command: UndoCommand): void => {
 };
 
 const handlePanelCommand = (message: unknown): void => {
-  if (!isPanelCommand(message)) return;
+  if (!panelVisible || !isPanelCommand(message)) return;
   if (message.type === "MASK_DETECTIONS") maskDetections(message);
   if (message.type === "MASK_SELECTION") maskSelection(message);
   if (message.type === "UNDO_MASK") undoMasking(message);
 };
 
-const activate = (): void => {
-  if (observer) return;
+const activatePanelInteraction = (): void => {
+  if (
+    panelInteractionActive ||
+    !lifecycle.isRunning ||
+    panelPorts.size === 0
+  ) {
+    return;
+  }
   manualMaskShortcut?.mount();
-  document.addEventListener("input", handleInput, true);
-  document.addEventListener("submit", handleSubmit, true);
   document.addEventListener("select", selectionController.handleGesture, true);
   document.addEventListener(
     "pointerup",
@@ -585,19 +608,12 @@ const activate = (): void => {
     selectionController.handleSelectionChange,
     true,
   );
-  observer = new MutationObserver(scheduleScan);
-  observer.observe(document.documentElement, {
-    childList: true,
-    characterData: true,
-    subtree: true,
-  });
-  scanComposerSafely();
+  panelInteractionActive = true;
   if (composer) selectionController.capture(composer);
 };
 
-const deactivate = (): void => {
-  document.removeEventListener("input", handleInput, true);
-  document.removeEventListener("submit", handleSubmit, true);
+const deactivatePanelInteraction = (): void => {
+  if (!panelInteractionActive) return;
   document.removeEventListener(
     "select",
     selectionController.handleGesture,
@@ -618,12 +634,19 @@ const deactivate = (): void => {
     selectionController.handleSelectionChange,
     true,
   );
-  observer?.disconnect();
   manualMaskShortcut?.unmount();
-  observer = null;
+  manualMaskShortcut?.hide();
+  selectionController.reset();
+  panelInteractionActive = false;
+};
+
+const resetDraftContext = (notifyUndo: boolean): void => {
+  draftSession.startNewContext();
+  selectionController.reset();
+  manualMaskShortcut?.hide();
+  discardUndo("CONTEXT_CHANGED", notifyUndo);
   composer = null;
   sourceUrl = "";
-  draftSession.startNewContext();
   currentText = "";
   currentStructure = null;
   revision = 0;
@@ -631,8 +654,37 @@ const deactivate = (): void => {
   lastHostStatus = { type: "HOST_STATUS", state: "SEARCHING" };
   lastSnapshot = null;
   writeInProgress = false;
-  selectionController.reset();
-  discardUndo("CONTEXT_CHANGED", false);
+};
+
+const resumeContent = (baseline: boolean): void => {
+  suppressNoticeOnce = baseline;
+  backgroundNotice.mount();
+  backgroundNotice.showSearching(null, true);
+  if (panelVisible) activatePanelInteraction();
+};
+
+const pauseContent = (): void => {
+  deactivatePanelInteraction();
+  backgroundNotice.unmount();
+  resetDraftContext(false);
+  lastHostStatus = { type: "HOST_STATUS", state: "SEARCHING" };
+};
+
+const setPanelVisible = (visible: boolean): void => {
+  pendingPanelClose = false;
+  if (panelVisible === visible) {
+    backgroundNotice.setPanelVisible(visible);
+    if (visible) activatePanelInteraction();
+    return;
+  }
+  panelVisible = visible;
+  backgroundNotice.setPanelVisible(visible);
+  if (visible) activatePanelInteraction();
+  else deactivatePanelInteraction();
+  suppressNoticeOnce = !visible;
+  resetDraftContext(false);
+  broadcast({ type: "HOST_STATUS", state: "SEARCHING" });
+  scanComposerSafely();
 };
 
 const isTrustedPanelPort = (port: chrome.runtime.Port): boolean =>
@@ -640,27 +692,66 @@ const isTrustedPanelPort = (port: chrome.runtime.Port): boolean =>
   port.sender?.id === chrome.runtime.id &&
   port.sender.url === chrome.runtime.getURL("side-panel.html");
 
-chrome.runtime.onConnect.addListener((port) => {
+const handlePanelConnect = (port: chrome.runtime.Port): void => {
   if (!isTrustedPanelPort(port)) {
     if (port.name === PANEL_CONTENT_PORT) port.disconnect();
     return;
   }
 
-  const shouldActivate = panelPorts.size === 0;
   panelPorts.add(port);
-  if (shouldActivate) {
-    activate();
-  } else {
-    draftSession.startNewContext();
-    selectionController.discard();
-    discardUndo("CONTEXT_CHANGED");
-    lastSnapshot = null;
-    broadcast({ type: "HOST_STATUS", state: "SEARCHING" });
-    scanComposerSafely();
-  }
-  port.onMessage.addListener(handlePanelCommand);
+  resetDraftContext(false);
+  broadcast({ type: "HOST_STATUS", state: "SEARCHING" });
+  scanComposerSafely();
+  port.onMessage.addListener((message: unknown) => {
+    if (!panelPorts.has(port)) return;
+    if (isPanelViewReady(message)) {
+      setPanelVisible(true);
+      return;
+    }
+    handlePanelCommand(message);
+  });
   port.onDisconnect.addListener(() => {
     panelPorts.delete(port);
-    if (panelPorts.size === 0) deactivate();
+    if (panelPorts.size !== 0) return;
+    setPanelVisible(false);
   });
+};
+
+const handleRuntimeMessage = (
+  message: unknown,
+  sender: chrome.runtime.MessageSender,
+): void => {
+  if (
+    sender.id !== chrome.runtime.id ||
+    !isPanelVisibilitySignal(message)
+  ) {
+    return;
+  }
+  if (message.state === "OPEN") {
+    setPanelVisible(true);
+    return;
+  }
+  if (panelPorts.size > 0) {
+    pendingPanelClose = true;
+    return;
+  }
+  setPanelVisible(false);
+};
+
+const disposeContent = (): void => {
+  chrome.runtime.onConnect.removeListener(handlePanelConnect);
+  chrome.runtime.onMessage.removeListener(handleRuntimeMessage);
+  panelPorts.clear();
+};
+
+chrome.runtime.onConnect.addListener(handlePanelConnect);
+chrome.runtime.onMessage.addListener(handleRuntimeMessage);
+lifecycle = new ContentLifecycleController({
+  onDispose: disposeContent,
+  onInput: handleInput,
+  onPause: pauseContent,
+  onResume: resumeContent,
+  onScan: scanComposerSafely,
+  onSubmit: handleSubmit,
 });
+lifecycle.start();
