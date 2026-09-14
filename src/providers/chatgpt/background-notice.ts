@@ -1,5 +1,6 @@
 import { NoticeScheduler } from "./notice-scheduler";
 import { calculateNoticePosition } from "./notice-position";
+import { ToastInteractionController } from "./toast-interaction-controller";
 
 const HOST_ID = "prompt-mask-background-notice";
 const NOTICE_STYLES = `
@@ -23,6 +24,8 @@ interface BackgroundNoticeOptions {
   shadowMode?: ShadowRootMode;
 }
 
+type ToastContent = "COUNT" | "OPEN_ERROR" | null;
+
 export class BackgroundNotice {
   private readonly host = document.createElement("div");
   private readonly counter = document.createElement("button");
@@ -33,10 +36,12 @@ export class BackgroundNotice {
   private readonly scheduler: NoticeScheduler;
   private readonly hideDelayMs: number;
   private readonly isTrustedActivation: (event: Event) => boolean;
+  private interaction!: ToastInteractionController;
   private composer: HTMLElement | null = null;
-  private hideTimer: number | null = null;
+  private detectionCount = 0;
   private mounted = false;
   private panelVisible = false;
+  private toastContent: ToastContent = null;
 
   constructor(
     private readonly openPanel: () => Promise<boolean>,
@@ -62,9 +67,10 @@ export class BackgroundNotice {
     window.removeEventListener("resize", this.reposition);
     window.removeEventListener("scroll", this.reposition, true);
     this.scheduler.reset(null, true);
-    this.clearHideTimer();
+    this.hideToast();
     this.host.remove();
     this.composer = null;
+    this.detectionCount = 0;
     this.mounted = false;
   }
 
@@ -72,32 +78,39 @@ export class BackgroundNotice {
     this.panelVisible = visible;
     if (visible) {
       this.scheduler.reset();
-      this.hideToast();
-      this.host.style.display = "none";
+      this.hidePageControls(this.composer);
     }
   }
 
   showSearching(composer: HTMLElement | null, resetPolicy = false): void {
     if (resetPolicy) this.scheduler.reset();
     else this.scheduler.cancelPending();
-    this.hideToast();
-    this.showCounter(composer, "—", "Wynik analizy jest ustalany.");
+    this.detectionCount = 0;
+    this.hidePageControls(composer);
   }
 
   showReady(composer: HTMLElement, count: number, baseline = false): void {
+    this.detectionCount = Math.max(0, count);
+    if (count <= 0) {
+      this.scheduler.update(count, baseline || this.panelVisible);
+      this.hidePageControls(composer);
+      return;
+    }
     this.showCounter(
       composer,
       String(count),
       `${count} ${count === 1 ? "fragment" : "fragmenty"} do sprawdzenia.`,
     );
+    if (!this.toast.hidden && this.toastContent === "COUNT") {
+      this.setCountMessage(count);
+    }
     this.scheduler.update(count, baseline || this.panelVisible);
-    if (count === 0) this.hideToast();
   }
 
   showUnavailable(composer: HTMLElement | null): void {
     this.scheduler.reset();
-    this.hideToast();
-    this.showCounter(composer, "!", "Analiza niedostępna.");
+    this.detectionCount = 0;
+    this.hidePageControls(composer);
   }
 
   get element(): HTMLDivElement {
@@ -117,6 +130,12 @@ export class BackgroundNotice {
     this.host.style.cssText =
       "display:none;position:fixed;z-index:2147483645;width:min(320px,calc(100vw - 16px));height:34px;pointer-events:none;";
     const shadow = this.host.attachShadow({ mode: shadowMode });
+    this.interaction = new ToastInteractionController(
+      this.toast,
+      shadow,
+      this.hideDelayMs,
+      () => this.hideToast(),
+    );
     const style = document.createElement("style");
     style.textContent = NOTICE_STYLES;
     this.counter.type = "button";
@@ -135,10 +154,10 @@ export class BackgroundNotice {
     this.closeButton.textContent = "×";
     this.closeButton.setAttribute("aria-label", "Zamknij powiadomienie");
     this.closeButton.addEventListener("click", this.handleDismiss);
-    this.toast.addEventListener("mouseenter", this.clearHideTimer);
-    this.toast.addEventListener("mouseleave", this.scheduleHide);
-    this.toast.addEventListener("focusin", this.clearHideTimer);
-    this.toast.addEventListener("focusout", this.handleFocusOut);
+    this.toast.addEventListener("mouseenter", this.interaction.handleMouseEnter);
+    this.toast.addEventListener("mouseleave", this.interaction.handleMouseLeave);
+    this.toast.addEventListener("focusin", this.interaction.handleFocusIn);
+    this.toast.addEventListener("focusout", this.interaction.handleFocusOut);
     this.toast.addEventListener("keydown", this.handleKeyDown);
     this.toast.append(this.toastMessage, this.reviewButton, this.closeButton);
     shadow.append(style, this.toast, this.counter);
@@ -163,26 +182,47 @@ export class BackgroundNotice {
 
   private readonly showToast = (count: number): void => {
     if (this.panelVisible || !this.composer || document.hidden) return;
-    this.toastMessage.textContent = `Wykryto fragmenty do sprawdzenia: ${count}`;
+    if (!this.toast.hidden && this.toastContent === "OPEN_ERROR") return;
+    this.toastContent = "COUNT";
+    this.setCountMessage(count);
     this.toast.hidden = false;
     this.reposition();
-    this.scheduleHide();
+    this.interaction.schedule();
   };
 
   private hideToast(): void {
-    this.clearHideTimer();
+    this.interaction.reset();
     this.toast.hidden = true;
+    this.toastContent = null;
+  }
+
+  private hidePageControls(composer: HTMLElement | null): void {
+    this.composer = composer;
+    this.hideToast();
+    this.host.style.display = "none";
+  }
+
+  private setCountMessage(count: number): void {
+    this.toastMessage.textContent = `Wykryto fragmenty do sprawdzenia: ${count}`;
   }
 
   private readonly handleOpen = (event: Event): void => {
     if (!this.isTrustedActivation(event)) return;
     this.hideToast();
     void this.openPanel().then((opened) => {
-      if (opened || this.panelVisible || !this.composer) return;
+      if (
+        opened ||
+        this.panelVisible ||
+        !this.composer ||
+        this.detectionCount <= 0
+      ) {
+        return;
+      }
+      this.toastContent = "OPEN_ERROR";
       this.toastMessage.textContent =
         "Nie udało się otworzyć panelu. Użyj ikony rozszerzenia.";
       this.toast.hidden = false;
-      this.scheduleHide();
+      this.interaction.schedule();
     });
   };
 
@@ -196,26 +236,7 @@ export class BackgroundNotice {
     if (event.key !== "Escape" || !this.isTrustedActivation(event)) return;
     event.stopPropagation();
     this.hideToast();
-  };
-
-  private readonly handleFocusOut = (event: FocusEvent): void => {
-    if (
-      event.relatedTarget instanceof Node &&
-      this.toast.contains(event.relatedTarget)
-    ) {
-      return;
-    }
-    this.scheduleHide();
-  };
-
-  private readonly scheduleHide = (): void => {
-    this.clearHideTimer();
-    this.hideTimer = window.setTimeout(() => this.hideToast(), this.hideDelayMs);
-  };
-
-  private readonly clearHideTimer = (): void => {
-    if (this.hideTimer !== null) window.clearTimeout(this.hideTimer);
-    this.hideTimer = null;
+    this.counter.focus({ preventScroll: true });
   };
 
   private readonly reposition = (): void => {

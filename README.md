@@ -2,8 +2,9 @@
 
 Rozszerzenie Chromium, które lokalnie analizuje tekst wpisywany w natywnym
 edytorze ChatGPT także przy schowanym panelu. Dyskretny licznik przy edytorze
-sygnalizuje liczbę propozycji, a użytkownik otwiera panel dopiero wtedy, gdy chce
-je sprawdzić lub zamaskować.
+pojawia się dopiero po wykryciu co najmniej jednego fragmentu i sygnalizuje
+liczbę propozycji. Użytkownik otwiera panel dopiero wtedy, gdy chce je sprawdzić
+lub zamaskować.
 
 ## Działa obecnie
 
@@ -28,9 +29,10 @@ je sprawdzić lub zamaskować.
    ogólnym oznaczeniem `[DANE_N]`, również gdy detektory niczego nie znalazły.
 9. Przy poprawnym zaznaczeniu nad prawą krawędzią edytora pojawia się mały skrót
    `[•••]`, uruchamiający dokładnie tę samą ręczną operację.
-10. „Schowaj” zamyka panel, ale pozostawia lokalną analizę i licznik na
-    widocznej karcie. Dymek pokazuje wyłącznie liczbę nowych propozycji i akcję
-    „Sprawdź”.
+10. „Schowaj” zamyka panel, ale pozostawia lokalną analizę na widocznej karcie.
+    Licznik i dymek pojawiają się tylko przy dodatniej liczbie wykryć; dymek
+    pokazuje wyłącznie bieżącą liczbę propozycji i akcję „Sprawdź”. Zamknięcie
+    od razu unieważnia poprzednią sesję, zaznaczenie i możliwość cofnięcia.
 
 Panel pokazuje u góry kompaktowy stan połączenia z ChatGPT, a potem sekcję
 „Do sprawdzenia”. Pusty szkic ma komunikat „Zacznij pisać”, natomiast tekst bez
@@ -38,7 +40,7 @@ obsługiwanych danych — „Brak wykryć”. Komunikat operacji i „Cofnij” 
 się tylko wtedy, gdy są potrzebne. Pod listą pozostaje pomocnicze „Maskuj
 zaznaczenie” oraz stała informacja, że strona ChatGPT ma dostęp do wpisanego
 tekstu. Po schowaniu panelu jego funkcje decyzyjne i `[•••]` są wyłączone;
-licznik służy tylko do ponownego otwarcia panelu.
+licznik służy tylko do ponownego otwarcia panelu, gdy istnieją wykrycia.
 
 Aby zamaskować fragment ręcznie, zaznacz go myszą albo klawiaturą w polu
 wiadomości, a następnie kliknij `[•••]` przy edytorze albo „Maskuj zaznaczenie”
@@ -103,21 +105,30 @@ odśwież stronę ChatGPT.
 
 Używaj wyłącznie danych utworzonych na potrzeby testu.
 
-Najpierw odbierz zachowanie BG-001 w Chrome 142 lub nowszym:
+Najpierw odbierz poprawkę BG-001A na bazie BG-001 w Chrome 142 lub nowszym:
 
-1. Po F5, bez otwierania panelu, wpisz `email=qa@example.com`. Sprawdź licznik,
-   dymek i zachowanie fokusu edytora. Zmniejsz i zwiększ okno: kontrolki mają
+1. Po F5, bez otwierania panelu, sprawdź pusty szkic i zwykły tekst — kontrolka
+   promptMask nie może być widoczna. Wpisz `email=qa@example.com`; dopiero wtedy
+   sprawdź licznik, dymek i zachowanie fokusu edytora. Usuń e-mail: obie
+   kontrolki mają zniknąć. Zmniejsz i zwiększ okno: po ponownym wykryciu mają
    pozostać przy edytorze i wewnątrz viewportu; przy braku miejsca nad polem
    powinny przejść pod nie.
-2. Dopisz zwykły tekst, zamknij dymek i dodaj kolejny typ danych. Ten sam wynik
-   nie powinien ponawiać dymka, a wzrost liczby powinien użyć aktualnej wartości.
-3. Otwórz panel kolejno przez „Sprawdź”, licznik i ikonę rozszerzenia.
-4. Sprawdź pojedyncze, zbiorcze i ręczne maskowanie oraz dokładne „Cofnij”.
-5. Użyj „Schowaj” i natywnego X. W obu przypadkach analiza ma działać dalej,
+2. Przy widocznym dymku usuń fragmenty tak, aby licznik zmienił się z 3 na 1,
+   a następnie ponownie zwiększ wynik. Treść ma aktualizować się od razu bez
+   ponownego otwarcia i bez przedłużenia pierwotnego czasu wyświetlania. Wynik 0
+   ma ukryć dymek. Po ręcznym zamknięciu ten sam wynik nie powinien go ponawiać.
+3. Ustaw fokus kolejno na „Sprawdź” i zamknięciu, wyjedź kursorem poza dymek i
+   odczekaj ponad 6 sekund. Dymek nie może zniknąć, dopóki fokus pozostaje w
+   środku. Sprawdź też Tab, Escape i niezależne wejście/wyjście kursorem.
+4. Otwórz panel kolejno przez „Sprawdź”, licznik i ikonę rozszerzenia.
+5. Sprawdź pojedyncze, zbiorcze i ręczne maskowanie oraz dokładne „Cofnij”.
+6. Użyj „Schowaj” i natywnego X. W obu przypadkach analiza ma działać dalej,
    a po ponownym otwarciu stare „Cofnij” i sukces nie mogą wrócić.
-6. Powtórz na dwóch rozmowach, kartach i oknach oraz po zmianie rozmowy, F5,
-   przejściu na inną domenę i powrocie.
-7. Sprawdź uśpienie lub diagnostyczny restart workera, klawiaturę, zoom, wąski
+7. Szybko zamykaj i otwieraj panel na dwóch kartach oraz w dwóch oknach. Stary
+   panel nie może wykonać maskowania ani cofnięcia, a opóźnione zamknięcie nie
+   może odebrać uprawnień nowszemu panelowi.
+8. Powtórz po zmianie rozmowy, F5, przejściu na inną domenę i powrocie.
+9. Sprawdź uśpienie lub diagnostyczny restart workera, klawiaturę, zoom, wąski
    panel, limit tekstu i brak edytora.
 
 Zapisz wersję Chrome i systemu. Edge wymaga oddzielnego odbioru; testy

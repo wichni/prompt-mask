@@ -20,6 +20,7 @@ import { requestOpenSidePanel } from "../../platform/chromium/side-panel-client"
 import {
   isPanelViewReady,
   isPanelVisibilitySignal,
+  type PanelVisibilitySignal,
 } from "../../platform/chromium/side-panel-signals";
 import {
   captureComposerRestorePoint,
@@ -45,13 +46,16 @@ import { DraftSession } from "./draft-session";
 import { BackgroundNotice } from "./background-notice";
 import { ContentLifecycleController } from "./content-lifecycle";
 
-const panelPorts = new Set<chrome.runtime.Port>();
+let activePanelPort: chrome.runtime.Port | null = null;
+let activePanelReady = false;
 const backgroundNotice = new BackgroundNotice(requestOpenSidePanel);
 let lifecycle: ContentLifecycleController;
 let panelVisible = false;
 let panelInteractionActive = false;
 let suppressNoticeOnce = false;
-let pendingPanelClose = false;
+let visibilitySourceId: string | null = null;
+let visibilitySequence = 0;
+const retiredVisibilitySources = new Set<string>();
 let composer: HTMLElement | null = null;
 let sourceUrl = "";
 const draftSession = new DraftSession(() => crypto.randomUUID());
@@ -71,14 +75,14 @@ const postToPanel = (port: chrome.runtime.Port, event: PanelEvent): void => {
   try {
     port.postMessage(event);
   } catch {
-    panelPorts.delete(port);
+    revokePanelPort(port);
   }
 };
 
 const broadcast = (event: PanelEvent): void => {
   if (event.type === "HOST_STATUS") lastHostStatus = event;
   if (event.type === "ANALYSIS_SNAPSHOT") lastSnapshot = event;
-  panelPorts.forEach((port) => postToPanel(port, event));
+  if (activePanelPort) postToPanel(activePanelPort, event);
 };
 
 const discardUndo = (
@@ -580,8 +584,18 @@ const undoMasking = (command: UndoCommand): void => {
   });
 };
 
-const handlePanelCommand = (message: unknown): void => {
-  if (!panelVisible || !isPanelCommand(message)) return;
+const handlePanelCommand = (
+  port: chrome.runtime.Port,
+  message: unknown,
+): void => {
+  if (
+    port !== activePanelPort ||
+    !activePanelReady ||
+    !panelVisible ||
+    !isPanelCommand(message)
+  ) {
+    return;
+  }
   if (message.type === "MASK_DETECTIONS") maskDetections(message);
   if (message.type === "MASK_SELECTION") maskSelection(message);
   if (message.type === "UNDO_MASK") undoMasking(message);
@@ -591,7 +605,8 @@ const activatePanelInteraction = (): void => {
   if (
     panelInteractionActive ||
     !lifecycle.isRunning ||
-    panelPorts.size === 0
+    !activePanelPort ||
+    !activePanelReady
   ) {
     return;
   }
@@ -671,7 +686,6 @@ const pauseContent = (): void => {
 };
 
 const setPanelVisible = (visible: boolean): void => {
-  pendingPanelClose = false;
   if (panelVisible === visible) {
     backgroundNotice.setPanelVisible(visible);
     if (visible) activatePanelInteraction();
@@ -698,23 +712,54 @@ const handlePanelConnect = (port: chrome.runtime.Port): void => {
     return;
   }
 
-  panelPorts.add(port);
-  resetDraftContext(false);
-  broadcast({ type: "HOST_STATUS", state: "SEARCHING" });
-  scanComposerSafely();
+  const previousPort = activePanelPort;
+  const wasVisible = panelVisible;
+  activePanelPort = port;
+  activePanelReady = false;
+  if (previousPort && previousPort !== port) {
+    try {
+      previousPort.disconnect();
+    } catch {
+      // The old view is already gone. Its commands remain revoked by identity.
+    }
+  }
+  setPanelVisible(false);
+  if (!wasVisible) {
+    resetDraftContext(false);
+    broadcast({ type: "HOST_STATUS", state: "SEARCHING" });
+    scanComposerSafely();
+  }
   port.onMessage.addListener((message: unknown) => {
-    if (!panelPorts.has(port)) return;
+    if (port !== activePanelPort) return;
     if (isPanelViewReady(message)) {
+      activePanelReady = true;
       setPanelVisible(true);
       return;
     }
-    handlePanelCommand(message);
+    handlePanelCommand(port, message);
   });
   port.onDisconnect.addListener(() => {
-    panelPorts.delete(port);
-    if (panelPorts.size !== 0) return;
-    setPanelVisible(false);
+    revokePanelPort(port);
   });
+};
+
+function revokePanelPort(port: chrome.runtime.Port): void {
+  if (port !== activePanelPort) return;
+  activePanelPort = null;
+  activePanelReady = false;
+  setPanelVisible(false);
+}
+
+const acceptVisibilitySignal = (signal: PanelVisibilitySignal): boolean => {
+  if (signal.sourceId !== visibilitySourceId) {
+    if (retiredVisibilitySources.has(signal.sourceId)) return false;
+    if (visibilitySourceId) retiredVisibilitySources.add(visibilitySourceId);
+    visibilitySourceId = signal.sourceId;
+    visibilitySequence = 0;
+  }
+  if (signal.sequence <= visibilitySequence) return false;
+  visibilitySequence = signal.sequence;
+  return true;
 };
 
 const handleRuntimeMessage = (
@@ -723,25 +768,26 @@ const handleRuntimeMessage = (
 ): void => {
   if (
     sender.id !== chrome.runtime.id ||
-    !isPanelVisibilitySignal(message)
+    !isPanelVisibilitySignal(message) ||
+    !acceptVisibilitySignal(message)
   ) {
     return;
   }
   if (message.state === "OPEN") {
-    setPanelVisible(true);
     return;
   }
-  if (panelPorts.size > 0) {
-    pendingPanelClose = true;
-    return;
-  }
-  setPanelVisible(false);
+  if (activePanelPort) revokePanelPort(activePanelPort);
+  else setPanelVisible(false);
 };
 
 const disposeContent = (): void => {
   chrome.runtime.onConnect.removeListener(handlePanelConnect);
   chrome.runtime.onMessage.removeListener(handleRuntimeMessage);
-  panelPorts.clear();
+  const port = activePanelPort;
+  activePanelPort = null;
+  activePanelReady = false;
+  if (port) port.disconnect();
+  retiredVisibilitySources.clear();
 };
 
 chrome.runtime.onConnect.addListener(handlePanelConnect);

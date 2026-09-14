@@ -6,11 +6,14 @@ Wersja manifestu: `0.1.0`
 ## Działa obecnie
 
 - panel boczny Manifest V3 z React i TypeScript, z akcją „Schowaj” korzystającą
-  z natywnego zamknięcia globalnego panelu,
+  z natywnego zamknięcia globalnego panelu; zamknięcie od razu odbiera staremu
+  połączeniu prawo do decyzji oraz unieważnia sesję, zaznaczenie i cofanie,
 - obserwacja natywnego edytora ChatGPT bez dodatkowego pola; przy schowanym
-  panelu strona otrzymuje mały responsywny licznik i ograniczony dymek,
-  kotwiczone przy edytorze i mieszczące się w bieżącym viewporcie, a `[•••]`
-  pozostaje dostępne wyłącznie przy otwartym panelu,
+  panelu i dodatniej liczbie wykryć strona otrzymuje mały responsywny licznik i
+  ograniczony dymek, kotwiczone przy edytorze i mieszczące się w bieżącym
+  viewporcie. Pusty szkic, zwykły tekst oraz trwająca lub niedostępna analiza nie
+  pokazują kontrolek strony, a `[•••]` pozostaje dostępne wyłącznie przy otwartym
+  panelu,
 - lokalna analiza tekstu podczas pisania działa na widocznej obsługiwanej karcie
   również wtedy, gdy panel nigdy nie został otwarty albo jest schowany,
 - pauza i świeże wznowienie po `visibilitychange`, `pagehide` i `pageshow`, z
@@ -33,8 +36,9 @@ Wersja manifestu: `0.1.0`
 - lista propozycji z ikoną typu, nazwą i wyłącznie częściowo ukrytym podglądem,
 - kompaktowy biało-niebieski panel z nazwą ChatGPT, licznikiem blisko góry i
   komunikatem operacji zajmującym miejsce tylko wtedy, gdy istnieje,
-- dymek wyłącznie z liczbą wykryć, debounce 700 ms, ograniczeniem do jednego
-  nowego dymka na 10 sekund, automatycznym ukryciem i obsługą Escape/hover/fokusu,
+- dymek wyłącznie z bieżącą liczbą wykryć, debounce 700 ms, ograniczeniem do
+  jednego nowego dymka na 10 sekund, automatycznym ukryciem i niezależną obsługą
+  Escape, hoveru i fokusu,
 - fokus po operacji związany z konkretną sesją i przyciskiem; zmiana celu,
   kontekstu, widoczności lub operacja uruchomiona przez `[•••]` anuluje żądanie,
 - uczciwe rozróżnienie łączenia, pustego szkicu, tekstu bez wykryć, trwającej
@@ -107,9 +111,9 @@ treści. Aktualna funkcja pomaga użytkownikowi zauważyć i zmienić dane przed
 
 - `npm run typecheck` — zaliczony,
 - `npm run test:medical` — zaliczone testy: 19/19,
-- `npm test -- tests/content-script.test.ts` — zaliczone testy: 53/53 bez
+- `npm test -- tests/content-script.test.ts` — zaliczone testy: 57/57 bez
   timeoutu po zwolnieniu portów i nasłuchów każdej instancji testowej,
-- `npm test` — zaliczone testy: 313/313 w 19 plikach,
+- `npm test` — zaliczone testy: 328/328 w 20 plikach,
 - `npm run build` — zaliczony; manifest nie publikuje już zasobów dodatkowego
   pola, a content script pozostaje samodzielnym bundłem,
 - testy BG-001 obejmują analizę bez panelu, pauzę i świeże wznowienie, ścisłe
@@ -118,6 +122,15 @@ treści. Aktualna funkcja pomaga użytkownikowi zauważyć i zmienić dane przed
   `open()`/`close()`, licznik i dymek bez surowych danych, debounce/cooldown oraz
   anulowanie spóźnionego fokusu; pozycjonowanie ma regresje dla szerokiego,
   wąskiego i bardzo małego viewportu oraz zmiany rozmiaru okna,
+- regresje BG-001A obejmują odrzucenie opóźnionych sygnałów OPEN/CLOSED osobno
+  dla każdego okna, restart workera z nowym źródłem kolejności, natychmiastową
+  utratę uprawnień starego portu i cofania po CLOSED, odporność nowego połączenia
+  na spóźnione READY/disconnect oraz aktualizację widocznego dymka przy zmianach
+  3→1, 1→3 i 1→0 bez przedłużania timera. Fokus i hover są testowane niezależnie.
+- regresja widoczności kontrolki potwierdza brak licznika podczas wyszukiwania,
+  niedostępnej analizy i wyniku 0, jego pojawienie się dopiero dla dodatniej
+  liczby, ponowne ukrycie po usunięciu ostatniego wykrycia oraz brak spóźnionego
+  dymka błędu po nieudanym otwarciu panelu,
 - testy MED-002/MED-003/MED-004 obejmują dokładne zakresy JSON i
   `klucz=wartość`,
   odrzucenie swobodnego tekstu, niecytowanej nazwy, aliasów, wartości z
@@ -174,6 +187,10 @@ treści. Aktualna funkcja pomaga użytkownikowi zauważyć i zmienić dane przed
 
 ## CI
 
+- Workflow `CI` dla BG-001 na `main`, SHA
+  `522753413d8b4ac4baa0bd2b409a7a3f7ed0a5c6`, zakończył się powodzeniem:
+  [run 34828820574](https://github.com/wichni/prompt-mask/actions/runs/34828820574).
+  Run potwierdza typecheck, testy 313/313 i build tej rewizji.
 - Workflow `CI` dla UI-001 na `main`, SHA
   `140c9ad9f6b5b3a7e8daf41916ec692eecfd5847`, zakończył się powodzeniem:
   [run 34821116452](https://github.com/wichni/prompt-mask/actions/runs/34821116452).
@@ -182,8 +199,8 @@ treści. Aktualna funkcja pomaga użytkownikowi zauważyć i zmienić dane przed
   run nie jest dowodem wymaganej blokady scalania; w czasie przeglądu API GitHub
   zwracało dla `main` `protected: false`. Zmiany administracyjne repozytorium
   pozostają poza tym etapem.
-- Dla roboczego BG-001 zdalne CI oczekuje na autoryzowaną publikację nowej
-  rewizji.
+- BG-001A pozostaje zmianą lokalną. Zdalne CI tej poprawki oczekuje na osobno
+  autoryzowaną publikację nowej rewizji.
 
 ## Pomiar MED-001 po MED-006
 
@@ -239,6 +256,10 @@ Kolejny zrzut z 14.09.2026 potwierdza licznik przy edytorze na szerokim
 viewporcie przed korektą pozycji. Po poprawce licznik jest wyrównywany do prawej
 krawędzi edytora z odstępem 4 px, a dymek przechodzi pod pole i zmienia układ na
 węższym ekranie. Ręczny odbiór tych wariantów nadal oczekuje.
+Zrzut użytkownika z 14.09.2026 o 12:16 ujawnił stale widoczny licznik
+`promptMask · 0` przy pustym szkicu. Bieżąca korekta ukrywa całą kontrolkę dla
+wyniku 0, wyszukiwania i niedostępnej analizy; ma na razie dowód automatyczny,
+a ręczne potwierdzenie po przeładowaniu rozszerzenia oczekuje.
 Zrzuty użytkownika z 15:25 pokazują stan sprzed MED-002: brak wykrycia
 `patientName` oraz tylko istniejące wykrycie e-maila. Nie są dowodem działania
 nowych kategorii; po buildzie i przeładowaniu rozszerzenia wymagają ponownego
@@ -269,9 +290,11 @@ Użytkownik zgłosił, że UI-001 został wgrany do `main` i przetestowany; wcze
 potwierdził działanie w Chrome. Zgłoszenie nie zawiera wersji przeglądarki ani
 systemu, zakresu wykonanych scenariuszy ani odbioru Edge. UI-001 ma też zielone
 CI dokładnej rewizji `140c9ad9f6b5b3a7e8daf41916ec692eecfd5847`.
-BG-001 ma obecnie wyłącznie dowody automatyczne z atrap DOM i API. Nie wykonano
-jeszcze natywnej ścieżki licznik → otwarcie → Schowaj/X → ponowne otwarcie,
-restartu workera ani odbioru fokusu na prawdziwej stronie w Chrome lub Edge.
+BG-001 ma zielone CI dokładnej rewizji bazowej, ale nie ma pełnego natywnego
+odbioru. BG-001A ma obecnie wyłącznie dowody lokalne z atrap DOM i API. Nie
+wykonano jeszcze natywnej ścieżki licznik → otwarcie → Schowaj/X → ponowne
+otwarcie, restartu workera, szybkiej zmiany kart i okien ani odbioru aktualizacji
+i fokusu dymka na prawdziwej stronie w Chrome lub Edge.
 
 ## Wymagany odbiór użytkownika
 
@@ -298,10 +321,10 @@ uszkodzonych celów.
 
 ## Bieżący etap
 
-BG-001 jest w stanie roboczym na bazie UI-001
-`140c9ad9f6b5b3a7e8daf41916ec692eecfd5847`. Rozdziela aktywność analizy od
-widoczności panelu, dodaje licznik, ograniczony dymek, natywne „Schowaj”, ścisły
-routing workera i poprawkę spóźnionego fokusu. Nie zmienia detektorów, reguł
-maskowania ani uprawnień; podnosi minimum Chrome do 142. Lokalnie zaliczono
-typecheck, pełne 313/313, build i kontrolę diffu. Zdalne CI BG-001 oraz ręczny
+Bieżąca korekta UX jest lokalną zmianą na jeszcze nieopublikowanym BG-001A,
+który bazuje na BG-001 `522753413d8b4ac4baa0bd2b409a7a3f7ed0a5c6`.
+Kontrolki strony pojawiają się dopiero przy dodatniej liczbie wykryć i znikają
+po powrocie do zera; panel oraz analiza w tle działają bez zmian. Etap nie
+zmienia detektorów, reguł maskowania, uprawnień ani granicy danych. Lokalnie
+zaliczono typecheck, pełne 328/328, build i kontrolę diffu. Zdalne CI oraz ręczny
 odbiór w Chrome i Edge oczekują.

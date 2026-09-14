@@ -27,10 +27,20 @@ const closed: Listener<(info: PanelLifecycleInfo) => void> = {};
 
 const open = vi.fn(async () => undefined);
 const setPanelBehavior = vi.fn(async () => undefined);
-const query = vi.fn(async ({ windowId }: { windowId: number }) => [
-  { id: windowId + 100 },
-]);
-const sendMessage = vi.fn(async () => undefined);
+const query = vi.fn<
+  (options: { windowId: number }) => Promise<chrome.tabs.Tab[]>
+>(async ({ windowId }) => [{ id: windowId + 100 } as chrome.tabs.Tab]);
+const sendMessage = vi.fn<
+  (tabId: number, signal: PanelVisibilitySignal) => Promise<void>
+>(async () => undefined);
+
+const deferred = <T,>() => {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+};
 
 const trustedSender = (windowId: number): chrome.runtime.MessageSender => ({
   id: "prompt-mask-test",
@@ -64,7 +74,11 @@ beforeEach(async () => {
   vi.resetModules();
   open.mockReset().mockResolvedValue(undefined);
   setPanelBehavior.mockReset().mockResolvedValue(undefined);
-  query.mockClear();
+  query
+    .mockReset()
+    .mockImplementation(async ({ windowId }) => [
+      { id: windowId + 100 } as chrome.tabs.Tab,
+    ]);
   sendMessage.mockClear();
   vi.stubGlobal("chrome", {
     runtime: {
@@ -218,15 +232,106 @@ describe("side panel service worker", () => {
 
     expect(query).toHaveBeenCalledWith({ active: true, windowId: 3 });
     expect(query).toHaveBeenCalledWith({ active: true, windowId: 9 });
-    expect(sendMessage.mock.calls).toEqual([
-      [103, {
-        type: "PROMPT_MASK_PANEL_VISIBILITY",
-        state: "OPEN",
-      } satisfies PanelVisibilitySignal],
-      [109, {
-        type: "PROMPT_MASK_PANEL_VISIBILITY",
-        state: "CLOSED",
-      } satisfies PanelVisibilitySignal],
+    const firstSignal = sendMessage.mock.calls[0]![1] as PanelVisibilitySignal;
+    const secondSignal = sendMessage.mock.calls[1]![1] as PanelVisibilitySignal;
+    expect(sendMessage.mock.calls.map(([tabId]) => tabId)).toEqual([103, 109]);
+    expect(firstSignal).toEqual({
+      type: "PROMPT_MASK_PANEL_VISIBILITY",
+      state: "OPEN",
+      sourceId: expect.stringMatching(/^[0-9a-f-]{36}$/u),
+      sequence: 1,
+    });
+    expect(secondSignal).toEqual({
+      type: "PROMPT_MASK_PANEL_VISIBILITY",
+      state: "CLOSED",
+      sourceId: firstSignal.sourceId,
+      sequence: 2,
+    });
+  });
+
+  it("does not send a stale open after a newer close in the same window", async () => {
+    const pendingOpen = deferred<chrome.tabs.Tab[]>();
+    const pendingClose = deferred<chrome.tabs.Tab[]>();
+    query
+      .mockImplementationOnce(() => pendingOpen.promise)
+      .mockImplementationOnce(() => pendingClose.promise);
+
+    opened.value?.({ path: "/side-panel.html", windowId: 4 });
+    closed.value?.({ path: "/side-panel.html", windowId: 4 });
+    pendingClose.resolve([{ id: 204 } as chrome.tabs.Tab]);
+    await vi.waitFor(() => expect(sendMessage).toHaveBeenCalledOnce());
+    pendingOpen.resolve([{ id: 104 } as chrome.tabs.Tab]);
+    await Promise.resolve();
+
+    expect(sendMessage).toHaveBeenCalledOnce();
+    expect(sendMessage).toHaveBeenCalledWith(204, {
+      type: "PROMPT_MASK_PANEL_VISIBILITY",
+      state: "CLOSED",
+      sourceId: expect.stringMatching(/^[0-9a-f-]{36}$/u),
+      sequence: 2,
+    });
+  });
+
+  it("does not send a stale close after a newer open in the same window", async () => {
+    const pendingClose = deferred<chrome.tabs.Tab[]>();
+    const pendingOpen = deferred<chrome.tabs.Tab[]>();
+    query
+      .mockImplementationOnce(() => pendingClose.promise)
+      .mockImplementationOnce(() => pendingOpen.promise);
+
+    closed.value?.({ path: "/side-panel.html", windowId: 5 });
+    opened.value?.({ path: "/side-panel.html", windowId: 5 });
+    pendingOpen.resolve([{ id: 105 } as chrome.tabs.Tab]);
+    await vi.waitFor(() => expect(sendMessage).toHaveBeenCalledOnce());
+    pendingClose.resolve([{ id: 205 } as chrome.tabs.Tab]);
+    await Promise.resolve();
+
+    expect(sendMessage).toHaveBeenCalledOnce();
+    expect(sendMessage).toHaveBeenCalledWith(105, {
+      type: "PROMPT_MASK_PANEL_VISIBILITY",
+      state: "OPEN",
+      sourceId: expect.stringMatching(/^[0-9a-f-]{36}$/u),
+      sequence: 2,
+    });
+  });
+
+  it("keeps lifecycle work for different windows independent", async () => {
+    const firstWindow = deferred<chrome.tabs.Tab[]>();
+    const secondWindow = deferred<chrome.tabs.Tab[]>();
+    query
+      .mockImplementationOnce(() => firstWindow.promise)
+      .mockImplementationOnce(() => secondWindow.promise);
+
+    opened.value?.({ path: "/side-panel.html", windowId: 3 });
+    closed.value?.({ path: "/side-panel.html", windowId: 8 });
+    secondWindow.resolve([{ id: 208 } as chrome.tabs.Tab]);
+    await vi.waitFor(() => expect(sendMessage).toHaveBeenCalledOnce());
+    firstWindow.resolve([{ id: 103 } as chrome.tabs.Tab]);
+    await vi.waitFor(() => expect(sendMessage).toHaveBeenCalledTimes(2));
+
+    expect(sendMessage.mock.calls.map(([tabId]) => tabId)).toEqual([208, 103]);
+    expect(sendMessage.mock.calls.map(([, signal]) => signal.state)).toEqual([
+      "CLOSED",
+      "OPEN",
     ]);
+  });
+
+  it("closes both the opened tab and the tab active at close time", async () => {
+    query
+      .mockResolvedValueOnce([{ id: 110 } as chrome.tabs.Tab])
+      .mockResolvedValueOnce([{ id: 111 } as chrome.tabs.Tab]);
+
+    opened.value?.({ path: "/side-panel.html", windowId: 10 });
+    await vi.waitFor(() => expect(sendMessage).toHaveBeenCalledOnce());
+    closed.value?.({ path: "/side-panel.html", windowId: 10 });
+    await vi.waitFor(() => expect(sendMessage).toHaveBeenCalledTimes(3));
+
+    const closeCalls = sendMessage.mock.calls.slice(1);
+    expect(closeCalls.map(([tabId]) => tabId)).toEqual([110, 111]);
+    expect(closeCalls[0]![1]).toEqual(closeCalls[1]![1]);
+    expect(closeCalls[0]![1]).toMatchObject({
+      state: "CLOSED",
+      sequence: 2,
+    });
   });
 });

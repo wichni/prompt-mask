@@ -8,7 +8,10 @@ import {
   type SelectionState,
   type UndoResult,
 } from "../src/platform/chromium/messages";
-import { PANEL_VIEW_READY } from "../src/platform/chromium/side-panel-signals";
+import {
+  PANEL_VIEW_READY,
+  type PanelVisibilitySignal,
+} from "../src/platform/chromium/side-panel-signals";
 
 const noticeMock = vi.hoisted(() => ({
   mount: vi.fn(),
@@ -35,6 +38,17 @@ interface ListenerSlot<T> {
 }
 
 const runtimeId = "prompt-mask-test";
+const visibilitySourceId = "38a05fac-21cf-43e7-89b8-cad1bb6050c8";
+const visibilitySignal = (
+  state: PanelVisibilitySignal["state"],
+  sequence: number,
+  sourceId = visibilitySourceId,
+): PanelVisibilitySignal => ({
+  type: "PROMPT_MASK_PANEL_VISIBILITY",
+  state,
+  sourceId,
+  sequence,
+});
 const onConnect: ListenerSlot<(port: chrome.runtime.Port) => void> = {};
 const onRuntimeMessage: ListenerSlot<
   (message: unknown, sender: chrome.runtime.MessageSender) => void
@@ -238,15 +252,26 @@ describe("native composer analysis", () => {
     panel.fireMessage(PANEL_VIEW_READY);
   });
 
-  it("keeps page controls hidden until a live panel port closes", () => {
+  it("revokes a live panel port immediately after a valid close signal", () => {
+    const textarea = document.querySelector<HTMLTextAreaElement>("textarea")!;
+    textarea.value = "qa@example.com";
     const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
     connectPanel(panel);
+    const snapshot = snapshots(panel).at(-1)!;
+    selectTextareaRange(textarea, 0, 2);
+    const selection = selectionStates(panel).at(-1);
+    if (selection?.state !== "READY") throw new Error("Expected selection");
     noticeMock.setPanelVisible.mockClear();
 
     onRuntimeMessage.listener?.(
+      visibilitySignal("CLOSED", 1),
+      { id: "other-extension" },
+    );
+    expect(noticeMock.setPanelVisible).not.toHaveBeenCalled();
+
+    onRuntimeMessage.listener?.(
       {
-        type: "PROMPT_MASK_PANEL_VISIBILITY",
-        state: "CLOSED",
+        ...visibilitySignal("CLOSED", 1),
         url: "https://chatgpt.com/c/private",
       },
       { id: runtimeId },
@@ -254,13 +279,116 @@ describe("native composer analysis", () => {
     expect(noticeMock.setPanelVisible).not.toHaveBeenCalled();
 
     onRuntimeMessage.listener?.(
-      { type: "PROMPT_MASK_PANEL_VISIBILITY", state: "CLOSED" },
+      visibilitySignal("CLOSED", 1),
       { id: runtimeId },
     );
-    expect(noticeMock.setPanelVisible).not.toHaveBeenCalled();
+    expect(noticeMock.setPanelVisible).toHaveBeenLastCalledWith(false);
+
+    panel.fireMessage({
+      type: "MASK_DETECTIONS",
+      sessionId: snapshot.sessionId,
+      revision: snapshot.revision,
+      detectionIds: snapshot.detections.map(({ id }) => id),
+    });
+    panel.fireMessage({
+      type: "MASK_SELECTION",
+      selectionId: selection.selectionId,
+    });
+    panel.fireMessage(PANEL_VIEW_READY);
 
     panel.fireDisconnect();
-    expect(noticeMock.setPanelVisible).toHaveBeenLastCalledWith(false);
+    expect(textarea.value).toBe("qa@example.com");
+  });
+
+  it("keeps a new panel connection active after stale close and disconnect events", () => {
+    const textarea = document.querySelector<HTMLTextAreaElement>("textarea")!;
+    textarea.value = "first@example.com";
+    const firstPanel = createPort(
+      `chrome-extension://${runtimeId}/side-panel.html`,
+    );
+    connectPanel(firstPanel);
+    const firstSnapshot = snapshots(firstPanel).at(-1)!;
+    firstPanel.fireMessage({
+      type: "MASK_DETECTIONS",
+      sessionId: firstSnapshot.sessionId,
+      revision: firstSnapshot.revision,
+      detectionIds: firstSnapshot.detections.map(({ id }) => id),
+    });
+    const firstResult = maskResults(firstPanel).at(-1)!;
+    if (firstResult.status !== "SUCCESS") throw new Error("Expected masking");
+
+    onRuntimeMessage.listener?.(
+      visibilitySignal("CLOSED", 1),
+      { id: runtimeId },
+    );
+    firstPanel.fireMessage({
+      type: "UNDO_MASK",
+      operationId: firstResult.undoOperationId,
+    });
+    expect(textarea.value).toBe("[EMAIL_1]");
+
+    onRuntimeMessage.listener?.(
+      visibilitySignal("OPEN", 2),
+      { id: runtimeId },
+    );
+    const secondPanel = createPort(
+      `chrome-extension://${runtimeId}/side-panel.html`,
+    );
+    connectPanel(secondPanel);
+    const reopenedSnapshot = snapshots(secondPanel).at(-1)!;
+    expect(reopenedSnapshot.sessionId).not.toBe(firstSnapshot.sessionId);
+
+    onRuntimeMessage.listener?.(
+      visibilitySignal("CLOSED", 1),
+      { id: runtimeId },
+    );
+    firstPanel.fireMessage(PANEL_VIEW_READY);
+    firstPanel.fireDisconnect();
+    textarea.value = "second@example.com";
+    textarea.dispatchEvent(new InputEvent("input", { bubbles: true }));
+    const secondSnapshot = snapshots(secondPanel).at(-1)!;
+    secondPanel.fireMessage({
+      type: "MASK_DETECTIONS",
+      sessionId: secondSnapshot.sessionId,
+      revision: secondSnapshot.revision,
+      detectionIds: secondSnapshot.detections.map(({ id }) => id),
+    });
+
+    expect(textarea.value).toBe("[EMAIL_1]");
+    expect(maskResults(secondPanel).at(-1)).toMatchObject({ status: "SUCCESS" });
+  });
+
+  it("accepts a new worker source and rejects delayed signals from the retired source", () => {
+    const firstSource = "55975fe4-8448-48b1-9f55-b36fc8f8f791";
+    const restartedSource = "05db23f6-93fa-49a9-998a-a65aeb3305e8";
+    onRuntimeMessage.listener?.(
+      visibilitySignal("OPEN", 20, firstSource),
+      { id: runtimeId },
+    );
+    onRuntimeMessage.listener?.(
+      visibilitySignal("CLOSED", 1, restartedSource),
+      { id: runtimeId },
+    );
+    const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
+    connectPanel(panel);
+    const textarea = document.querySelector<HTMLTextAreaElement>("textarea")!;
+    textarea.value = "restart@example.com";
+    textarea.dispatchEvent(new InputEvent("input", { bubbles: true }));
+    const snapshot = snapshots(panel).at(-1)!;
+
+    onRuntimeMessage.listener?.(
+      visibilitySignal("CLOSED", 21, firstSource),
+      { id: runtimeId },
+    );
+    panel.fireMessage({
+      type: "MASK_DETECTIONS",
+      sessionId: snapshot.sessionId,
+      revision: snapshot.revision,
+      detectionIds: snapshot.detections.map(({ id }) => id),
+    });
+
+    expect(textarea.value).toBe("[EMAIL_1]");
+    expect(maskResults(panel).at(-1)).toMatchObject({ status: "SUCCESS" });
   });
 
   it("does not grant manual actions from a visibility signal without a panel port", () => {
@@ -268,7 +396,7 @@ describe("native composer analysis", () => {
     textarea.value = "syntetyczny fragment";
 
     onRuntimeMessage.listener?.(
-      { type: "PROMPT_MASK_PANEL_VISIBILITY", state: "OPEN" },
+      visibilitySignal("OPEN", 1),
       { id: runtimeId },
     );
     selectTextareaRange(textarea, 0, 11);

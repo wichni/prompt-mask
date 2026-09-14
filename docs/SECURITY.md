@@ -59,11 +59,26 @@ programowe zdarzenia bez `isTrusted`. Strona nadal może zauważyć host kontrol
 ukryć go, usunąć lub imitować jego wygląd, dlatego ikonka nie jest wskaźnikiem
 zaufania ani granicą bezpieczeństwa. Pełna kontrolka w panelu pozostaje dostępna.
 
-Przy schowanym panelu content script dodaje osobny licznik i dymek w zamkniętym
-Shadow DOM. Zawierają wyłącznie bieżącą liczbę, stałe teksty i natywne
-przyciski; nie zawierają szkicu, podglądów, typów wykryć, identyfikatorów ani
-URL. Aktywacja wymaga `isTrusted`. Strona może host ukryć, usunąć lub imitować,
-więc licznik również nie jest kontrolką bezpieczeństwa.
+Przy schowanym panelu i dodatniej liczbie wykryć content script dodaje osobny
+licznik i dymek w zamkniętym Shadow DOM. Przy pustym szkicu, zwykłym tekście,
+trwającej lub niedostępnej analizie nie pokazuje tych kontrolek. Zawierają one
+wyłącznie bieżącą liczbę, stałe teksty i natywne przyciski; nie zawierają szkicu,
+podglądów, typów wykryć, identyfikatorów ani URL. Aktywacja wymaga `isTrusted`.
+Strona może host ukryć, usunąć lub imitować, więc licznik również nie jest
+kontrolką bezpieczeństwa.
+
+Prawo do decyzji jest związane z jednym bieżącym, zweryfikowanym portem panelu
+i jego komunikatem `READY`. Poprawny sygnał `CLOSED` odbiera je lokalnie od
+razu oraz unieważnia sesję szkicu, zaznaczenie i cofanie; nie czeka na fizyczne
+rozłączenie portu. Spóźnione `READY` i `onDisconnect` starego portu nie mogą
+zmienić stanu nowszego połączenia.
+
+Service worker nadaje sygnałom widoczności losowy identyfikator swojej
+instancji i rosnący numer kolejny. Osobna generacja dla każdego okna odrzuca
+wynik starszego asynchronicznego `tabs.query()`. Przy zamknięciu sygnał trafia
+do kart, na których panel był otwarty, oraz do aktualnie aktywnej karty danego
+okna. Restart workera tworzy nowe źródło kolejności; stan ten nie jest
+utrzymywany w storage i nie stanowi źródła prawdy o szkicu.
 
 Analiza działa tylko w widocznym dokumencie ChatGPT. `visibilitychange` i
 `pagehide` zatrzymują observer, anulują RAF i timery, usuwają kontrolki oraz
@@ -82,6 +97,7 @@ Przed pierwszym zapisem DOM podmiana nie zachodzi, gdy:
   i jawnie dozwolone elementy liniowe,
 - decyzja ma nieznany typ lub dodatkowe pola,
 - nadawca nie jest panelem bieżącego rozszerzenia,
+- port panelu nie jest bieżący, potwierdzony przez `READY` i widoczny,
 - identyfikator sesji lub wersja decyzji nie odpowiada bieżącemu szkicowi,
 - zbiorcza decyzja nie odpowiada dokładnie aktualnej liście propozycji,
 - bieżący zakres nie zawiera wcześniej wykrytej wartości,
@@ -119,7 +135,8 @@ wysłać surowy tekst, dlatego UI nie może sugerować pełnej ochrony.
 | wyciek przez komunikat | ścisłe typy `unknown`; panel dostaje tylko ukryty podgląd |
 | przejęcie routingu otwarcia panelu | worker sprawdza `sender.id`, kartę nadawcy, główną ramkę i dokładny origin dokumentu oraz — jeśli Chrome go udostępnia — URL karty; `windowId` bierze z kontekstu nadawcy, a komunikat nie przyjmuje celu |
 | wyciek przez licznik lub dymek | wyłącznie liczba i stałe teksty ustawiane przez `textContent`; brak surowych danych w DOM i komunikacie workera |
-| stary stan po ukryciu karty lub panelu | idempotentny kontroler cyklu życia, anulowanie zadań i nowa sesja przed kolejną decyzją |
+| stary stan po ukryciu karty lub panelu | natychmiastowe lokalne odebranie uprawnień bieżącego portu, unieważnienie sesji, zaznaczenia i cofania oraz nowa sesja przed kolejną decyzją |
+| spóźniony sygnał widoczności | generacja osobna dla okna w workerze oraz identyfikator instancji i rosnący numer sygnału; starszy wynik zapytania i wycofane źródło są odrzucane |
 | obcy panel lub komenda | dokładny `sender.id`, URL panelu i allowlista pól |
 | użycie starej decyzji dla innego szkicu | losowy identyfikator sesji w snapshotach, komendach i wynikach; nowa sesja po zmianie pola, URL rozmowy lub ponownym połączeniu |
 | użycie starego zakresu | sesja i wersja szkicu oraz ponowne porównanie wartości zakresu |

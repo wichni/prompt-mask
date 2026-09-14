@@ -6,6 +6,15 @@ import {
 } from "./side-panel-signals";
 
 const PANEL_PATH = "side-panel.html";
+const visibilitySourceId = crypto.randomUUID();
+let nextVisibilitySequence = 1;
+
+interface WindowVisibilityState {
+  generation: number;
+  openTabIds: Set<number>;
+}
+
+const visibilityByWindow = new Map<number, WindowVisibilityState>();
 
 const enableActionClick = (): void => {
   void chrome.sidePanel
@@ -66,15 +75,38 @@ const notifyActiveTab = (
   windowId: number,
   state: PanelVisibilitySignal["state"],
 ): void => {
+  const windowState = visibilityByWindow.get(windowId) ?? {
+    generation: 0,
+    openTabIds: new Set<number>(),
+  };
+  visibilityByWindow.set(windowId, windowState);
+  windowState.generation += 1;
+  const generation = windowState.generation;
+  const sequence = nextVisibilitySequence++;
+  const knownRecipients = new Set(windowState.openTabIds);
+
   void chrome.tabs
     .query({ active: true, windowId })
     .then(([tab]) => {
-      if (!Number.isSafeInteger(tab?.id)) return;
+      if (windowState.generation !== generation) return;
+      const activeTabId = Number.isSafeInteger(tab?.id) ? tab!.id! : null;
+      const recipients =
+        state === "OPEN" ? new Set<number>() : knownRecipients;
+      if (activeTabId !== null) recipients.add(activeTabId);
+      if (state === "OPEN" && activeTabId !== null) {
+        windowState.openTabIds.add(activeTabId);
+      }
+      if (state === "CLOSED") windowState.openTabIds.clear();
+      if (recipients.size === 0) return;
       const signal: PanelVisibilitySignal = {
         type: "PROMPT_MASK_PANEL_VISIBILITY",
         state,
+        sourceId: visibilitySourceId,
+        sequence,
       };
-      return chrome.tabs.sendMessage(tab!.id!, signal);
+      return Promise.all(
+        [...recipients].map((tabId) => chrome.tabs.sendMessage(tabId, signal)),
+      );
     })
     .catch(() => {
       // The active tab may not be ChatGPT or its content script may be gone.

@@ -17,6 +17,8 @@ export type PanelViewReady = { type: "PROMPT_MASK_PANEL_READY" };
 export type PanelVisibilitySignal = {
   type: "PROMPT_MASK_PANEL_VISIBILITY";
   state: "OPEN" | "CLOSED";
+  sourceId: string;
+  sequence: number;
 };
 export type OpenPanelResponse = {
   type: "OPEN_PROMPT_MASK_PANEL_RESULT";
@@ -48,7 +50,13 @@ export const isPanelVisibilitySignal = (
   isRecord(value) &&
   value.type === "PROMPT_MASK_PANEL_VISIBILITY" &&
   (value.state === "OPEN" || value.state === "CLOSED") &&
-  hasOnlyKeys(value, ["type", "state"]);
+  typeof value.sourceId === "string" &&
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u.test(
+    value.sourceId,
+  ) &&
+  Number.isSafeInteger(value.sequence) &&
+  Number(value.sequence) > 0 &&
+  hasOnlyKeys(value, ["type", "state", "sourceId", "sequence"]);
 
 export const isOpenPanelResponse = (
   value: unknown,
