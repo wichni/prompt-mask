@@ -18,7 +18,7 @@ zaznaczenie.
    11-cyfrowa wartość nie przechodzi walidacji daty lub sumy kontrolnej.
 4. „Maskuj” zastępuje wyłącznie aktualny wykryty zakres oznaczeniem, np.
    `[PESEL_1]`.
-5. „Maskuj wszystkie wykryte (N)” zatwierdza dokładnie aktualną listę i wykonuje
+5. „Maskuj wszystkie (N)” zatwierdza dokładnie aktualną listę i wykonuje
    wszystkie podmiany jednym zapisem do pola.
 6. Po ponownej analizie panel potwierdza wykonaną operację. Brak kliknięcia
    pozostawia propozycje widoczne.
@@ -28,6 +28,13 @@ zaznaczenie.
    ogólnym oznaczeniem `[DANE_N]`, również gdy detektory niczego nie znalazły.
 9. Przy poprawnym zaznaczeniu nad prawą krawędzią edytora pojawia się mały skrót
    `[•••]`, uruchamiający dokładnie tę samą ręczną operację.
+
+Panel pokazuje u góry kompaktowy stan połączenia z ChatGPT, a potem sekcję
+„Do sprawdzenia”. Pusty szkic ma komunikat „Zacznij pisać”, natomiast tekst bez
+obsługiwanych danych — „Brak wykryć”. Komunikat operacji i „Cofnij” pojawiają
+się tylko wtedy, gdy są potrzebne. Pod listą pozostaje pomocnicze „Maskuj
+zaznaczenie” oraz stała informacja, że strona ChatGPT ma dostęp do wpisanego
+tekstu.
 
 Aby zamaskować fragment ręcznie, zaznacz go myszą albo klawiaturą w polu
 wiadomości, a następnie kliknij `[•••]` przy edytorze albo „Maskuj zaznaczenie”
@@ -150,7 +157,8 @@ cyfr, a następnie zbiorcze maskowanie dwóch jawnych pól i dokładne „Cofnij
 
 1. Wpisz do zwykłego pola ChatGPT syntetyczny e-mail, telefon i poprawny PESEL.
 2. Sprawdź biało-niebieską paletę, trzy propozycje, licznik oraz aktywne
-   „Maskuj wszystkie wykryte (3)”.
+   „Maskuj wszystkie (3)”. Powtórz kontrolę przy szerokościach panelu 280, 360
+   i 480 px; nie może pojawić się poziome przewijanie ani obcięcie akcji.
 3. Kliknij pojedyncze „Maskuj” i sprawdź właściwe oznaczenie, nowy licznik oraz
    krótkie potwierdzenie bez powtórzonej liczby pozostałych wykryć.
 4. Przygotuj tekst z czterema wystąpieniami tego samego syntetycznego telefonu.
@@ -170,9 +178,9 @@ cyfr, a następnie zbiorcze maskowanie dwóch jawnych pól i dokładne „Cofnij
 11. Sprawdź szybkie podwójne kliknięcie, zmianę samego fokusu i kursora, stan bez
     wykryć, brak dostępu do pola, obsługę klawiaturą, wąski panel i brak
     automatycznego wysłania.
-12. Przy liczniku `Do sprawdzenia: 0` wpisz dwa razy `Jan Testowy`, zaznacz
-    drugie wystąpienie i kliknij „Maskuj zaznaczenie”. Tylko drugi fragment ma
-    zmienić się na `[DANE_1]`; następnie sprawdź „Cofnij”.
+12. Przy liczniku `0` w sekcji `Do sprawdzenia` wpisz dwa razy `Jan Testowy`,
+    zaznacz drugie wystąpienie i kliknij „Maskuj zaznaczenie”. Tylko drugi
+    fragment ma zmienić się na `[DANE_1]`; następnie sprawdź „Cofnij”.
 13. Sprawdź ręczne zaznaczenie myszą i klawiaturą w obu kierunkach, także dla
     kilku wierszy, polskich znaków i emoji. Tekst poza zakresem ma pozostać bez
     zmian, a przejście fokusu do panelu nie może zgubić wyboru.

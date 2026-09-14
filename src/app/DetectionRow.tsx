@@ -1,28 +1,29 @@
 import type { DetectionSummary } from "../platform/chromium/messages";
 import { detectionLabels } from "./side-panel-state";
+import { DetectionIcon } from "./DetectionIcon";
 
 export const DetectionRow = ({
   detection,
-  disabled,
   onMask,
+  position,
 }: {
   detection: DetectionSummary;
-  disabled: boolean;
   onMask: (detection: DetectionSummary) => void;
+  position: number;
 }) => (
-  <article className="detection-item">
+  <li className="detection-item">
+    <DetectionIcon kind={detection.kind} />
     <div className="detection-details">
       <strong>{detectionLabels[detection.kind]}</strong>
       <code>{detection.maskedPreview}</code>
     </div>
     <button
-      aria-label={`Maskuj: ${detectionLabels[detection.kind]}`}
+      aria-label={`Maskuj pozycję ${position}: ${detectionLabels[detection.kind]}`}
       className="single-mask"
-      disabled={disabled}
       onClick={() => onMask(detection)}
       type="button"
     >
       Maskuj
     </button>
-  </article>
+  </li>
 );

@@ -32,6 +32,17 @@ warstwy DOM lub platformy.
 To zakres docelowy, a nie lista funkcji obecnie gotowych. Aktualny stan jest
 zawsze opisany w `STATUS.md`.
 
+## Kolejność przed pilotażem
+
+1. UI-001 porządkuje otwarty panel bez zmiany analizy i przepływu danych.
+2. Po odbiorze UI-001 osobny etap BG-001 rozdzieli cykl życia analizy od
+   otwartego panelu i doda dyskretne powiadomienie przy edytorze.
+3. Pilotaż rozpocznie się dopiero po odbiorze BG-001 oraz wymaganych scenariuszy
+   w Chrome i Edge.
+
+BG-001 nie jest częścią UI-001. Do jego wdrożenia nie wolno dodawać atrapy
+„Schowaj” ani obiecywać analizy po zamknięciu ostatniego panelu.
+
 ## Kierunek rozwoju detekcji
 
 Obecnie działają detektory PESEL-u, praktycznych adresów e-mail, polskich
@@ -50,9 +61,9 @@ nazwiska i hasła. MED-004 domyka pierwszeństwo pełnej wartości hasła oraz
 bezpieczne granice ograniczonych przypisań. Osobny zatwierdzony etap domknął
 granice detektora e-mail dla przypisań w logach i danych uwierzytelniających URI.
 MED-005 domyka granice cytowanego Bearer i adresu po `email=`, gdy część lokalna
-zawiera kolejny `=`. Po odbiorze Chrome i Edge następnym kandydatem jest wąskie
-jawne pole PESEL dla wartości niespełniającej walidacji daty lub sumy kontrolnej;
-nie oznacza to osłabienia heurystyki wszystkich 11-cyfrowych ciągów. Nazwy
+zawiera kolejny `=`. MED-006 dodaje wąskie jawne pole `pesel` dla wartości
+niespełniającej walidacji daty lub sumy kontrolnej; nie osłabia heurystyki
+wszystkich 11-cyfrowych ciągów. Nazwy
 pacjentów poza jawnymi polami nadal wymagają osobnego korpusu negatywnego.
 Dowolnego hasła, sekretu lub nazwiska w swobodnym zdaniu nie należy przedstawiać
 jako możliwego do niezawodnego wykrycia.

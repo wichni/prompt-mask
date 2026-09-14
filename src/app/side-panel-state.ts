@@ -51,8 +51,7 @@ export const INITIAL_PANEL_STATE: PanelState = {
   pendingManualMask: null,
   pendingUndo: null,
   selectionId: null,
-  selectionMessage:
-    "Zaznacz fragment w polu wiadomości, aby zamaskować go ręcznie.",
+  selectionMessage: "Zaznacz fragment w polu wiadomości.",
   undoOperationId: null,
   feedback: null,
 };

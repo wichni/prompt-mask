@@ -60,9 +60,10 @@ describe("side panel", () => {
   it("shows one masking action per compact finding and no premature empty state", () => {
     emit({ type: "HOST_STATUS", state: "READY" });
     expect(container.textContent).not.toContain("Brak wykryć");
-    expect(container.querySelector<HTMLButtonElement>(".bulk-mask")?.disabled).toBe(
-      true,
-    );
+    expect(container.textContent).toContain("Propozycje pojawią się");
+    expect(container.querySelector(".bulk-mask")).toBeNull();
+    expect(container.querySelector(".feedback")).toBeNull();
+    expect(container.querySelector(".status-placeholder")).toBeNull();
 
     emit({
       type: "ANALYSIS_SNAPSHOT",
@@ -83,24 +84,31 @@ describe("side panel", () => {
       ],
     });
 
-    expect(container.textContent).toContain("Do sprawdzenia: 2");
-    expect(container.textContent).toContain(
-      "Wybierz dane, które chcesz zamaskować",
-    );
+    expect(container.textContent).toContain("Do sprawdzenia2");
     expect(container.textContent).not.toContain("Pomiń");
     expect(container.textContent).not.toContain("Długość");
     expect(container.querySelector<HTMLButtonElement>(".bulk-mask")?.disabled).toBe(
       false,
     );
+    expect(container.querySelector(".review-count")?.getAttribute("aria-live")).toBe(
+      "polite",
+    );
     expect(container.querySelectorAll("button")).toHaveLength(4);
     expect(
       [...container.querySelectorAll("button")].map((button) => button.textContent),
     ).toEqual([
+      "Maskuj wszystkie (2)",
+      "Maskuj",
+      "Maskuj",
       "Maskuj zaznaczenie",
-      "Maskuj wszystkie wykryte (2)",
-      "Maskuj",
-      "Maskuj",
     ]);
+    expect(container.querySelectorAll(".detection-icon svg")).toHaveLength(2);
+    expect(
+      container.querySelectorAll(".detection-icon svg[aria-hidden='true']"),
+    ).toHaveLength(2);
+    expect(
+      container.querySelector<HTMLButtonElement>(".single-mask")?.ariaLabel,
+    ).toBe("Maskuj pozycję 1: E-mail");
   });
 
   it("shows structured patient-data categories without receiving raw values", () => {
@@ -166,7 +174,7 @@ describe("side panel", () => {
     const manual = container.querySelector<HTMLButtonElement>(".manual-mask")!;
     expect(manual.disabled).toBe(true);
     expect(container.textContent).toContain(
-      "Zaznacz fragment w polu wiadomości, aby zamaskować go ręcznie",
+      "Zaznacz fragment w polu wiadomości.",
     );
 
     emit({ type: "SELECTION_STATE", state: "READY", selectionId: 6 });
@@ -245,6 +253,50 @@ describe("side panel", () => {
       "Zamaskowano zaznaczony fragment.",
     );
     expect(container.querySelector(".undo-mask")).not.toBeNull();
+  });
+
+  it("distinguishes an empty draft from text without findings", () => {
+    emit({ type: "HOST_STATUS", state: "READY" });
+    emit({
+      type: "ANALYSIS_SNAPSHOT",
+      sessionId,
+      revision: 1,
+      length: 0,
+      detections: [],
+    });
+
+    expect(container.textContent).toContain("Zacznij pisać");
+    expect(container.textContent).not.toContain("Brak wykryć");
+    expect(container.querySelector(".bulk-mask")).toBeNull();
+
+    emit({
+      type: "ANALYSIS_SNAPSHOT",
+      sessionId,
+      revision: 2,
+      length: 16,
+      detections: [],
+    });
+
+    expect(container.textContent).not.toContain("Zacznij pisać");
+    expect(container.textContent).toContain("Brak wykryć");
+  });
+
+  it("shows the actual connection error without enabling actions", () => {
+    emit({
+      type: "HOST_STATUS",
+      state: "ERROR",
+      error: "UNSUPPORTED_TAB",
+    });
+
+    expect(container.textContent).toContain("Analiza niedostępna");
+    expect(container.textContent).toContain(
+      "Otwórz aktywną kartę https://chatgpt.com.",
+    );
+    expect(container.querySelector(".review-count")?.textContent).toBe("—");
+    expect(container.querySelector(".bulk-mask")).toBeNull();
+    expect(container.querySelector<HTMLButtonElement>(".manual-mask")?.disabled).toBe(
+      true,
+    );
   });
 
   it("announces success only after the updated snapshot and result", () => {
@@ -328,8 +380,9 @@ describe("side panel", () => {
       length: 12,
       detections: [],
     });
+    expect(container.textContent).toContain("Brak wykryć");
     expect(container.textContent).toContain(
-      "Brak wykryć dla obsługiwanych typów danych",
+      "Nie znaleziono obsługiwanych danych. Sprawdź też pozostałą treść.",
     );
 
     emit({
@@ -357,7 +410,7 @@ describe("side panel", () => {
     expect(container.textContent).toContain("a•••@e•••.com");
   });
 
-  it("sends the visible set once and keeps the status slot in place", () => {
+  it("sends the visible set once without presenting stale findings", () => {
     emit({ type: "HOST_STATUS", state: "READY" });
     emit({
       type: "ANALYSIS_SNAPSHOT",
@@ -377,7 +430,6 @@ describe("side panel", () => {
         },
       ],
     });
-    const statusSlot = container.querySelector(".operation-status");
     const bulkButton = container.querySelector<HTMLButtonElement>(".bulk-mask")!;
 
     act(() => {
@@ -397,6 +449,10 @@ describe("side panel", () => {
         ({ disabled }) => disabled,
       ),
     ).toBe(true);
+    expect(container.textContent).toContain("Maskowanie…");
+    expect(container.textContent).toContain("Aktualizuję analizę…");
+    expect(container.textContent).not.toContain("a•••@e•••.com");
+    expect(container.querySelector(".bulk-mask")).toBeNull();
 
     emit({
       type: "ANALYSIS_SNAPSHOT",
@@ -416,13 +472,14 @@ describe("side panel", () => {
       undoOperationId: 1,
     });
 
-    expect(container.querySelector(".operation-status")).toBe(statusSlot);
-    expect(container.querySelector(".bulk-mask")).toBe(bulkButton);
     expect(container.querySelector(".feedback")?.textContent).toContain(
       "Zamaskowane fragmenty: 2.",
     );
-    expect(container.textContent).toContain("Do sprawdzenia: 0");
-    expect(bulkButton.disabled).toBe(true);
+    expect(container.textContent).toContain("Do sprawdzenia0");
+    expect(container.querySelector(".bulk-mask")).toBeNull();
+    expect(document.activeElement).toBe(
+      container.querySelector("#review-heading"),
+    );
   });
 
   it("shows a distinct information status after a stale operation", () => {

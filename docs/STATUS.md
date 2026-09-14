@@ -24,10 +24,14 @@ Wersja manifestu: `0.1.0`
   `apiToken`, wartości po pełnym prefiksie nagłówka `Authorization: Bearer` oraz
   hasła URI; token Bearer zachowuje otaczające cudzysłowy, nawiasy i separatory,
   a cała wartość wygrywa z heurystykami i ma stały podgląd `•••`,
-- lista propozycji z typem i częściowo ukrytym podglądem,
-- biało-niebieski panel ze stałym miejscem na dostępny komunikat operacji,
+- lista propozycji z ikoną typu, nazwą i wyłącznie częściowo ukrytym podglądem,
+- kompaktowy biało-niebieski panel z nazwą ChatGPT, licznikiem blisko góry i
+  komunikatem operacji zajmującym miejsce tylko wtedy, gdy istnieje,
+- uczciwe rozróżnienie łączenia, pustego szkicu, tekstu bez wykryć, trwającej
+  operacji i błędu; podczas operacji stara lista nie jest pokazywana jako
+  aktualny wynik,
 - jedna jawna akcja „Maskuj”; brak decyzji pozostawia propozycję widoczną,
-- jawna akcja „Maskuj wszystkie wykryte (N)”, która zatwierdza aktualny zestaw
+- jawna akcja „Maskuj wszystkie (N)”, która zatwierdza aktualny zestaw
   wystąpień i zapisuje kompletny wynik do pola jednym wywołaniem adaptera,
 - stała akcja „Maskuj zaznaczenie”, dostępna także bez wykryć; zastępuje dokładny
   bieżący zakres oznaczeniem `[DANE_N]` bez przekazywania jego treści do panelu,
@@ -95,7 +99,7 @@ treści. Aktualna funkcja pomaga użytkownikowi zauważyć i zmienić dane przed
 - `npm run test:medical` — zaliczone testy: 19/19,
 - `npm test -- tests/content-script.test.ts` — zaliczone testy: 49/49 bez
   timeoutu po zwolnieniu portów i nasłuchów każdej instancji testowej,
-- `npm test` — zaliczone testy: 280/280 w 13 plikach,
+- `npm test` — zaliczone testy: 282/282 w 13 plikach,
 - `npm run build` — zaliczony; manifest nie publikuje już zasobów dodatkowego
   pola, a content script pozostaje samodzielnym bundłem,
 - testy MED-002/MED-003/MED-004 obejmują dokładne zakresy JSON i
@@ -154,20 +158,16 @@ treści. Aktualna funkcja pomaga użytkownikowi zauważyć i zmienić dane przed
 
 ## CI
 
-- Workflow `CI`, job `Verify`, dla bazy MED-006
-  `c793db72a9829aa7f4ff9c664a4e34dc11d283df` zakończył się błędem:
-  [run 34741366950](https://github.com/wichni/prompt-mask/actions/runs/34741366950).
-  Typecheck przeszedł, testy zakończyły się wynikiem 279/280 po timeoutcie w
-  `tests/content-script.test.ts`, a build został pominięty. Ten przebieg nie
-  obejmuje roboczej poprawki MED-006A.
+- Workflow `CI`, job `Verify`, dla bazy UI-001
+  `37768226de4ddb9e359616176b7fa503cc714adc` zakończył się powodzeniem:
+  [run 34813357958](https://github.com/wichni/prompt-mask/actions/runs/34813357958).
+  Typecheck, testy 280/280 i build przeszły. Przebieg obejmuje poprawkę
+  MED-006A, ale nie obejmuje roboczych zmian UI-001.
 - Workflow obejmuje też pull requesty do `main` i uruchomienie ręczne. Zielony
   run nie jest dowodem wymaganej blokady scalania; w czasie przeglądu API GitHub
   zwracało dla `main` `protected: false`. Zmiany administracyjne repozytorium
   pozostają poza tym etapem.
-- Dla roboczej poprawki MED-006A na bazie
-  `c793db72a9829aa7f4ff9c664a4e34dc11d283df` lokalnie zaliczono cały plik
-  content scriptu (49/49), `npm run typecheck`, `npm test` (280/280),
-  `npm run build` i `git diff --check`. Zdalne CI nowej rewizji oczekuje.
+- Dla UI-001 zdalne CI oczekuje na autoryzowaną publikację nowej rewizji.
 
 ## Pomiar MED-001 po MED-006
 
@@ -237,6 +237,13 @@ odebrane ręcznie w Chrome ani Edge.
 MED-006 ma tylko dowód automatyczny. Różnica między błędnym PESEL-em bez
 etykiety i w dokładnym polu `pesel`, zachowanie JSON, maskowanie zbiorcze oraz
 cofnięcie nie zostały jeszcze odebrane ręcznie w Chrome ani Edge.
+Użytkownik zgłosił po MED-006A, że rozszerzenie działa w Chrome. Zgłoszenie nie
+zawiera wersji przeglądarki ani systemu i nie zastępuje pełnego odbioru
+scenariuszy MED-006 lub UI-001; Edge nadal nie ma zgłoszonego odbioru.
+Roboczy UI-001 sprawdzono na lokalnym renderze właściwych komponentów przy
+szerokościach 280, 360 i 480 px. Dla każdej szerokości `scrollWidth` odpowiadał
+`clientWidth`; osobno obejrzano listę, brak wykryć, potwierdzenie z „Cofnij” i
+błąd integracji. To nie jest odbiór rozszerzenia na prawdziwej stronie.
 
 ## Wymagany odbiór użytkownika
 
@@ -261,10 +268,10 @@ uszkodzonych celów.
 
 ## Bieżący etap
 
-MED-006A w stanie roboczym na bazie
-`c793db72a9829aa7f4ff9c664a4e34dc11d283df` zwalnia po każdym teście content
-scriptu wszystkie utworzone porty i związane z nimi nasłuchy, zanim przywróci
-globale i mocki. Nie zmienia kodu produkcyjnego, timeoutów ani asercji. Lokalnie
-zaliczono 49/49 testów pliku, typecheck, pełne 280/280, build i kontrolę diffu;
-zdalne CI nowej rewizji oczekuje. Ręczny odbiór MED-006 w Chrome i Edge
-pozostaje niewykonany.
+UI-001 jest w stanie roboczym na bazie
+`37768226de4ddb9e359616176b7fa503cc714adc`. Zmienia kompozycję i style panelu,
+stany puste, prezentację trwającej operacji, dostępne nazwy akcji oraz powrót
+fokusu po zakończeniu operacji. Nie zmienia detektorów, protokołu, maskowania,
+cofania ani przepływu danych. Lokalnie zaliczono typecheck, pełne 282/282,
+build, kontrolę diffu i kontrolę renderu 280/360/480 px. Zdalne CI UI-001 oraz
+ręczny odbiór panelu w Chrome i Edge oczekują.

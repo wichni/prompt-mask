@@ -14,16 +14,19 @@ import {
   failUndoDelivery,
   INITIAL_PANEL_STATE,
   reducePanelEvent,
+  type PanelFeedback,
 } from "./side-panel-state";
 import { OperationStatus } from "./OperationStatus";
 import { ManualMaskAction } from "./ManualMaskAction";
-import { DetectionRow } from "./DetectionRow";
 import { ConnectionCard } from "./ConnectionCard";
+import { ReviewSection } from "./ReviewSection";
 
 export const SidePanel = () => {
   const [state, setState] = useState(INITIAL_PANEL_STATE);
   const sessionRef = useRef<NativeComposerSession | null>(null);
   const operationInFlightRef = useRef(false);
+  const focusAfterOperationRef = useRef(false);
+  const reviewHeadingRef = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
     const session = watchNativeComposer((event) => {
@@ -48,9 +51,7 @@ export const SidePanel = () => {
     };
   }, []);
 
-  const sendMaskCommand = (
-    detection: DetectionSummary | null,
-  ): void => {
+  const sendMaskCommand = (detection: DetectionSummary | null): void => {
     const snapshot = state.snapshot;
     if (!snapshot || state.pendingMask || operationInFlightRef.current) return;
     const detectionIds = detection
@@ -59,6 +60,7 @@ export const SidePanel = () => {
     if (detectionIds.length === 0) return;
 
     operationInFlightRef.current = true;
+    focusAfterOperationRef.current = true;
     setState((current) =>
       detection
         ? beginSingleMask(current, detection)
@@ -90,6 +92,7 @@ export const SidePanel = () => {
     }
 
     operationInFlightRef.current = true;
+    focusAfterOperationRef.current = true;
     setState(beginUndo);
     const delivered =
       sessionRef.current?.undo({ type: "UNDO_MASK", operationId }) ?? false;
@@ -112,6 +115,7 @@ export const SidePanel = () => {
       return;
     }
     operationInFlightRef.current = true;
+    focusAfterOperationRef.current = true;
     setState(beginManualMask);
     const delivered =
       sessionRef.current?.maskSelection({
@@ -132,74 +136,60 @@ export const SidePanel = () => {
     state.pendingManualMask !== null ||
     state.pendingUndo !== null;
   const actionsDisabled = !analysisComplete || operationPending;
+  const operationFeedback: PanelFeedback | null =
+    state.feedback ??
+    (state.pendingMask
+      ? { tone: "INFO", message: "Maskowanie…" }
+      : state.pendingManualMask !== null
+        ? { tone: "INFO", message: "Maskowanie zaznaczenia…" }
+        : null);
+
+  useEffect(() => {
+    if (
+      focusAfterOperationRef.current &&
+      !operationPending &&
+      operationFeedback
+    ) {
+      reviewHeadingRef.current?.focus({ preventScroll: true });
+      focusAfterOperationRef.current = false;
+    }
+  }, [operationFeedback, operationPending]);
 
   return (
     <main className="panel">
       <header className="header">
-        <span className="eyebrow">Lokalna analiza</span>
         <h1>promptMask</h1>
-        <p>Pisz normalnie w ChatGPT. Tutaj wybierasz, co zamaskować.</p>
       </header>
 
       <ConnectionCard host={state.host} message={state.hostMessage} />
 
-      <p className="analysis-summary" aria-live="polite">
-        <strong>
-          Do sprawdzenia: {analysisComplete ? detections.length : "—"}
-        </strong>
-      </p>
-
       <OperationStatus
-        feedback={state.feedback}
+        feedback={operationFeedback}
         onUndo={sendUndoCommand}
         undoAvailable={state.undoOperationId !== null}
         undoDisabled={operationPending}
       />
 
-      <section className="mask-actions" aria-label="Akcje maskowania">
-        <ManualMaskAction
-          disabled={actionsDisabled || state.selectionId === null}
-          instruction={state.selectionMessage}
-          onMask={sendManualMaskCommand}
-        />
-        <button
-          className="bulk-mask"
-          disabled={actionsDisabled || detections.length === 0}
-          onClick={() => sendMaskCommand(null)}
-          type="button"
-        >
-          Maskuj wszystkie wykryte ({detections.length})
-        </button>
-      </section>
+      <ReviewSection
+        analysisComplete={analysisComplete}
+        detections={detections}
+        headingRef={reviewHeadingRef}
+        length={state.snapshot?.length ?? null}
+        onMaskAll={() => sendMaskCommand(null)}
+        onMaskOne={sendMaskCommand}
+        operationPending={operationPending}
+      />
 
-      <section className="detections-card" aria-live="polite">
-        <h2>Propozycje maskowania</h2>
-        {analysisComplete && detections.length > 0 && (
-          <p className="detections-instruction">
-            Wybierz dane, które chcesz zamaskować.
-          </p>
-        )}
-        {analysisComplete && detections.length === 0 && (
-          <p>
-            Brak wykryć dla obsługiwanych typów danych. Sprawdź, czy tekst
-            zawiera inne dane wymagające ukrycia.
-          </p>
-        )}
-        {detections.map((detection) => (
-          <DetectionRow
-            detection={detection}
-            disabled={actionsDisabled}
-            key={detection.id}
-            onMask={(selected) => sendMaskCommand(selected)}
-          />
-        ))}
-      </section>
+      <ManualMaskAction
+        disabled={actionsDisabled || state.selectionId === null}
+        instruction={state.selectionMessage}
+        onMask={sendManualMaskCommand}
+      />
 
-      <aside className="warning" role="note">
-        <strong>Ważne ograniczenie</strong>
+      <aside className="privacy-boundary" role="note">
         <span>
-          Surowy tekst znajduje się w polu ChatGPT i jest dostępny dla tej
-          strony. promptMask nie wysyła go własnym kanałem.
+          Tekst wpisany w ChatGPT jest dostępny dla tej strony. promptMask
+          analizuje go lokalnie.
         </span>
       </aside>
     </main>

@@ -7,19 +7,20 @@ export const ConnectionCard = ({
 }) => {
   const isReady = host === "READY";
   return (
-    <section className="connection-card" aria-live="polite">
-      <span className={`connection-dot ${isReady ? "online" : ""}`} />
-      <div>
-        <strong>
+    <section className="connection-status" aria-live="polite">
+      <div className="connection-summary">
+        <span
+          aria-hidden="true"
+          className={`connection-dot ${isReady ? "online" : ""}`}
+        />
+        <span>
           {host === "CONNECTING" && "Łączenie z edytorem…"}
           {host === "ERROR" && "Analiza niedostępna"}
           {isReady && "Analiza aktywna"}
-        </strong>
-        <p>
-          {host === "ERROR" && message}
-          {isReady && "Tekst jest sprawdzany lokalnie podczas pisania."}
-        </p>
+        </span>
       </div>
+      <strong className="chat-provider">ChatGPT</strong>
+      {host === "ERROR" && <p>{message}</p>}
     </section>
   );
 };

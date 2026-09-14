@@ -8,6 +8,12 @@ export const ManualMaskAction = ({
   onMask: () => void;
 }) => (
   <div className="manual-mask-action">
+    <div>
+      <h2>Własny fragment</h2>
+      <p className="manual-mask-instruction" aria-live="polite">
+        {instruction}
+      </p>
+    </div>
     <button
       className="manual-mask"
       disabled={disabled}
@@ -16,8 +22,5 @@ export const ManualMaskAction = ({
     >
       Maskuj zaznaczenie
     </button>
-    <p className="manual-mask-instruction" aria-live="polite">
-      {instruction}
-    </p>
   </div>
 );
