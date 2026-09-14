@@ -131,6 +131,10 @@ udany przebieg i ustawienia ochrony gałęzi trzeba odnotować oddzielnie.
 Test atrapy nie potwierdza działania na rzeczywistej stronie. Odbioru
 użytkownika nie przypisuj automatyzacji.
 
+Każdy test zwalnia utworzone porty i związane z nimi nasłuchy przed
+przywróceniem globali i mocków. Reset modułów nie zastępuje zakończenia cyklu
+życia poprzedniej instancji.
+
 ## Self-review
 
 Przed raportem sprawdź:

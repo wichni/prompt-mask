@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   PANEL_CONTENT_PORT,
   type AnalysisSnapshot,
@@ -15,11 +15,12 @@ interface ListenerSlot<T> {
 
 const runtimeId = "prompt-mask-test";
 const onConnect: ListenerSlot<(port: chrome.runtime.Port) => void> = {};
+const createdPorts = new Set<{ fireDisconnect: () => void }>();
 
 const createPort = (senderUrl: string) => {
   const message: ListenerSlot<(value: unknown) => void> = {};
   const disconnect: ListenerSlot<() => void> = {};
-  return {
+  const port = {
     name: PANEL_CONTENT_PORT,
     sender: { id: runtimeId, url: senderUrl },
     postMessage: vi.fn(),
@@ -37,6 +38,8 @@ const createPort = (senderUrl: string) => {
     fireMessage: (value: unknown) => message.listener?.(value),
     fireDisconnect: () => disconnect.listener?.(),
   };
+  createdPorts.add(port);
+  return port;
 };
 
 const snapshots = (port: ReturnType<typeof createPort>): AnalysisSnapshot[] =>
@@ -125,6 +128,13 @@ beforeEach(async () => {
     },
   });
   await import("../src/providers/chatgpt/content-script");
+});
+
+afterEach(() => {
+  for (const port of createdPorts) port.fireDisconnect();
+  createdPorts.clear();
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 describe("native composer analysis", () => {

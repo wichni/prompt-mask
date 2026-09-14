@@ -1,6 +1,6 @@
 # Status projektu
 
-Stan na: 13.09.2026
+Stan na: 14.09.2026
 Wersja manifestu: `0.1.0`
 
 ## Działa obecnie
@@ -93,6 +93,8 @@ treści. Aktualna funkcja pomaga użytkownikowi zauważyć i zmienić dane przed
 
 - `npm run typecheck` — zaliczony,
 - `npm run test:medical` — zaliczone testy: 19/19,
+- `npm test -- tests/content-script.test.ts` — zaliczone testy: 49/49 bez
+  timeoutu po zwolnieniu portów i nasłuchów każdej instancji testowej,
 - `npm test` — zaliczone testy: 280/280 w 13 plikach,
 - `npm run build` — zaliczony; manifest nie publikuje już zasobów dodatkowego
   pola, a content script pozostaje samodzielnym bundłem,
@@ -152,23 +154,25 @@ treści. Aktualna funkcja pomaga użytkownikowi zauważyć i zmienić dane przed
 
 ## CI
 
-- Workflow `CI`, job `Verify`, zakończył się sukcesem po pushu do `main` dla
-  bazowego commita `39783d439d42d0ddd46d6e60d5dff09307a657bd`:
-  [run 34681034050](https://github.com/wichni/prompt-mask/actions/runs/34681034050).
-  W logu potwierdzono typecheck, 236/236 testów i build. Ten run obejmuje
-  MED-005, ale nie obejmuje roboczej poprawki MED-006.
+- Workflow `CI`, job `Verify`, dla bazy MED-006
+  `c793db72a9829aa7f4ff9c664a4e34dc11d283df` zakończył się błędem:
+  [run 34741366950](https://github.com/wichni/prompt-mask/actions/runs/34741366950).
+  Typecheck przeszedł, testy zakończyły się wynikiem 279/280 po timeoutcie w
+  `tests/content-script.test.ts`, a build został pominięty. Ten przebieg nie
+  obejmuje roboczej poprawki MED-006A.
 - Workflow obejmuje też pull requesty do `main` i uruchomienie ręczne. Zielony
   run nie jest dowodem wymaganej blokady scalania; w czasie przeglądu API GitHub
   zwracało dla `main` `protected: false`. Zmiany administracyjne repozytorium
   pozostają poza tym etapem.
-- Dla roboczej poprawki MED-006 lokalnie zaliczono `npm run typecheck`,
-  `npm test` (280/280), `npm run test:medical` (19/19), `npm run build` i
-  `git diff --check`. Nie uruchamiano dla niej zdalnego CI.
+- Dla roboczej poprawki MED-006A na bazie
+  `c793db72a9829aa7f4ff9c664a4e34dc11d283df` lokalnie zaliczono cały plik
+  content scriptu (49/49), `npm run typecheck`, `npm test` (280/280),
+  `npm run build` i `git diff --check`. Zdalne CI nowej rewizji oczekuje.
 
 ## Pomiar MED-001 po MED-006
 
-- W stanie roboczym na bazie `39783d439d42d0ddd46d6e60d5dff09307a657bd`
-  istnieją 24 syntetyczne przypadki, 28 niezależnych oznaczeń ochrony, jawna
+- W bazie `c793db72a9829aa7f4ff9c664a4e34dc11d283df` istnieją 24 syntetyczne
+  przypadki, 28 niezależnych oznaczeń ochrony, jawna
   baza wyników obecnego silnika oraz testy obliczeń i podmiany.
 - Dla kategorii obsługiwanych i reprezentowanych w korpusie dokładne wyniki to
   TP 26, FN 2 i FP 1 (czułość 92,86%, precyzja 96,30%). Pełny oczekiwany zakres
@@ -257,10 +261,10 @@ uszkodzonych celów.
 
 ## Bieżący etap
 
-MED-006 w stanie roboczym na bazie
-`39783d439d42d0ddd46d6e60d5dff09307a657bd` dodaje dokładne pole `pesel` dla
-11 cyfr ASCII, także gdy ścisła walidacja daty lub sumy zwraca `false`. Nie
-zmienia `isValidPesel`, typów komunikacji ani heurystyki dla nieopisanych
-ciągów. Lokalnie zaliczono typecheck, 280/280 testów, korpus 19/19, build i
-kontrolę diffu. CI bazy jest zielone, ale nie obejmuje MED-006; ręczny odbiór
-Chrome i Edge pozostaje niewykonany.
+MED-006A w stanie roboczym na bazie
+`c793db72a9829aa7f4ff9c664a4e34dc11d283df` zwalnia po każdym teście content
+scriptu wszystkie utworzone porty i związane z nimi nasłuchy, zanim przywróci
+globale i mocki. Nie zmienia kodu produkcyjnego, timeoutów ani asercji. Lokalnie
+zaliczono 49/49 testów pliku, typecheck, pełne 280/280, build i kontrolę diffu;
+zdalne CI nowej rewizji oczekuje. Ręczny odbiór MED-006 w Chrome i Edge
+pozostaje niewykonany.
