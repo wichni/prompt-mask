@@ -51,7 +51,7 @@ let activePanelReady = false;
 const backgroundNotice = new BackgroundNotice(requestOpenSidePanel);
 let lifecycle: ContentLifecycleController;
 let panelVisible = false;
-let panelInteractionActive = false;
+let selectionInteractionActive = false;
 let suppressNoticeOnce = false;
 let visibilitySourceId: string | null = null;
 let visibilitySequence = 0;
@@ -601,15 +601,8 @@ const handlePanelCommand = (
   if (message.type === "UNDO_MASK") undoMasking(message);
 };
 
-const activatePanelInteraction = (): void => {
-  if (
-    panelInteractionActive ||
-    !lifecycle.isRunning ||
-    !activePanelPort ||
-    !activePanelReady
-  ) {
-    return;
-  }
+const activateSelectionInteraction = (): void => {
+  if (selectionInteractionActive || !lifecycle.isRunning) return;
   manualMaskShortcut?.mount();
   document.addEventListener("select", selectionController.handleGesture, true);
   document.addEventListener(
@@ -623,12 +616,12 @@ const activatePanelInteraction = (): void => {
     selectionController.handleSelectionChange,
     true,
   );
-  panelInteractionActive = true;
+  selectionInteractionActive = true;
   if (composer) selectionController.capture(composer);
 };
 
-const deactivatePanelInteraction = (): void => {
-  if (!panelInteractionActive) return;
+const deactivateSelectionInteraction = (): void => {
+  if (!selectionInteractionActive) return;
   document.removeEventListener(
     "select",
     selectionController.handleGesture,
@@ -652,7 +645,7 @@ const deactivatePanelInteraction = (): void => {
   manualMaskShortcut?.unmount();
   manualMaskShortcut?.hide();
   selectionController.reset();
-  panelInteractionActive = false;
+  selectionInteractionActive = false;
 };
 
 const resetDraftContext = (notifyUndo: boolean): void => {
@@ -675,11 +668,11 @@ const resumeContent = (baseline: boolean): void => {
   suppressNoticeOnce = baseline;
   backgroundNotice.mount();
   backgroundNotice.showSearching(null, true);
-  if (panelVisible) activatePanelInteraction();
+  activateSelectionInteraction();
 };
 
 const pauseContent = (): void => {
-  deactivatePanelInteraction();
+  deactivateSelectionInteraction();
   backgroundNotice.unmount();
   resetDraftContext(false);
   lastHostStatus = { type: "HOST_STATUS", state: "SEARCHING" };
@@ -688,13 +681,10 @@ const pauseContent = (): void => {
 const setPanelVisible = (visible: boolean): void => {
   if (panelVisible === visible) {
     backgroundNotice.setPanelVisible(visible);
-    if (visible) activatePanelInteraction();
     return;
   }
   panelVisible = visible;
   backgroundNotice.setPanelVisible(visible);
-  if (visible) activatePanelInteraction();
-  else deactivatePanelInteraction();
   suppressNoticeOnce = !visible;
   resetDraftContext(false);
   broadcast({ type: "HOST_STATUS", state: "SEARCHING" });

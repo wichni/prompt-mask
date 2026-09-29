@@ -391,9 +391,10 @@ describe("native composer analysis", () => {
     expect(maskResults(panel).at(-1)).toMatchObject({ status: "SUCCESS" });
   });
 
-  it("does not grant manual actions from a visibility signal without a panel port", () => {
+  it("shows the manual shortcut for a fresh selection without opening the panel", () => {
     const textarea = document.querySelector<HTMLTextAreaElement>("textarea")!;
     textarea.value = "syntetyczny fragment";
+    textarea.dispatchEvent(new Event("input", { bubbles: true }));
 
     onRuntimeMessage.listener?.(
       visibilitySignal("OPEN", 1),
@@ -401,7 +402,37 @@ describe("native composer analysis", () => {
     );
     selectTextareaRange(textarea, 0, 11);
 
-    expect(document.querySelector("#prompt-mask-manual-shortcut")).toBeNull();
+    const shortcut = document.querySelector<HTMLElement>(
+      "#prompt-mask-manual-shortcut",
+    );
+    expect(shortcut?.style.display).toBe("block");
+    expect(createdPorts.size).toBe(0);
+
+    textarea.setSelectionRange(0, 0);
+    textarea.dispatchEvent(new Event("select", { bubbles: true }));
+    expect(shortcut?.style.display).toBe("none");
+  });
+
+  it("invalidates the old selection on panel close and accepts a fresh one", () => {
+    const textarea = document.querySelector<HTMLTextAreaElement>("textarea")!;
+    textarea.value = "syntetyczny fragment";
+    const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
+    connectPanel(panel);
+    selectTextareaRange(textarea, 0, 11);
+    const shortcut = document.querySelector<HTMLElement>(
+      "#prompt-mask-manual-shortcut",
+    );
+    expect(shortcut?.style.display).toBe("block");
+
+    onRuntimeMessage.listener?.(
+      visibilitySignal("CLOSED", 1),
+      { id: runtimeId },
+    );
+    expect(shortcut?.style.display).toBe("none");
+
+    selectTextareaRange(textarea, 12, textarea.value.length);
+    expect(shortcut?.style.display).toBe("block");
+    expect(textarea.value).toBe("syntetyczny fragment");
   });
 
   it("restores a confirmed open-panel interaction after a fresh page resume", () => {

@@ -1,6 +1,6 @@
 # Status projektu
 
-Stan na: 14.09.2026
+Stan na: 29.09.2026
 Wersja manifestu: `0.1.0`
 
 ## Działa obecnie
@@ -12,8 +12,7 @@ Wersja manifestu: `0.1.0`
   panelu i dodatniej liczbie wykryć strona otrzymuje mały responsywny licznik i
   ograniczony dymek, kotwiczone przy edytorze i mieszczące się w bieżącym
   viewporcie. Pusty szkic, zwykły tekst oraz trwająca lub niedostępna analiza nie
-  pokazują kontrolek strony, a `[•••]` pozostaje dostępne wyłącznie przy otwartym
-  panelu,
+  pokazują licznika ani dymka; `[•••]` zależy od poprawnego zaznaczenia,
 - lokalna analiza tekstu podczas pisania działa na widocznej obsługiwanej karcie
   również wtedy, gdy panel nigdy nie został otwarty albo jest schowany,
 - pauza i świeże wznowienie po `visibilitychange`, `pagehide` i `pageshow`, z
@@ -50,7 +49,8 @@ Wersja manifestu: `0.1.0`
 - stała akcja „Maskuj zaznaczenie”, dostępna także bez wykryć; zastępuje dokładny
   bieżący zakres oznaczeniem `[DANE_N]` bez przekazywania jego treści do panelu,
 - pomocniczy skrót `[•••]` nad prawą krawędzią aktywnego edytora, widoczny tylko
-  dla poprawnego zaznaczenia i korzystający z tej samej ręcznej operacji,
+  dla poprawnego zaznaczenia także przy schowanym panelu i korzystający z tej
+  samej ręcznej operacji,
 - obsługa wyboru myszą i klawiaturą, powtórzeń, wielu węzłów oraz zakresów UTF-16
   z polskimi znakami, emoji i nowymi liniami,
 - wspólna reprezentacja obsługiwanych `contenteditable`: akapity `p`/`div`,
@@ -109,11 +109,14 @@ treści. Aktualna funkcja pomaga użytkownikowi zauważyć i zmienić dane przed
 
 ## Dowody automatyczne
 
+- dla bieżącej poprawki `[•••]`: `npm run typecheck`, `npm test` (329/329 w 20
+  plikach), `npm run build` i `git diff --check` — zaliczone lokalnie; testy
+  content scriptu obejmują świeże zaznaczenie bez panelu oraz po jego zamknięciu,
 - `npm run typecheck` — zaliczony,
 - `npm run test:medical` — zaliczone testy: 19/19,
-- `npm test -- tests/content-script.test.ts` — zaliczone testy: 57/57 bez
+- `npm test -- tests/content-script.test.ts` — zaliczone testy: 58/58 bez
   timeoutu po zwolnieniu portów i nasłuchów każdej instancji testowej,
-- `npm test` — zaliczone testy: 328/328 w 20 plikach,
+- `npm test` — zaliczone testy: 329/329 w 20 plikach,
 - `npm run build` — zaliczony; manifest nie publikuje już zasobów dodatkowego
   pola, a content script pozostaje samodzielnym bundłem,
 - testy BG-001 obejmują analizę bez panelu, pauzę i świeże wznowienie, ścisłe
@@ -295,6 +298,10 @@ odbioru. BG-001A ma obecnie wyłącznie dowody lokalne z atrap DOM i API. Nie
 wykonano jeszcze natywnej ścieżki licznik → otwarcie → Schowaj/X → ponowne
 otwarcie, restartu workera, szybkiej zmiany kart i okien ani odbioru aktualizacji
 i fokusu dymka na prawdziwej stronie w Chrome lub Edge.
+Zrzuty użytkownika z 29.09.2026 pokazują, że `[•••]` pojawia się przy otwartym
+panelu, ale nie przy schowanym i zaznaczonym tekście; nowe testy atrapy DOM
+obejmują wybór przed otwarciem panelu i po jego zamknięciu. Ręczny odbiór tej
+poprawki w Chrome i Edge nadal oczekuje.
 
 ## Wymagany odbiór użytkownika
 
@@ -321,10 +328,9 @@ uszkodzonych celów.
 
 ## Bieżący etap
 
-Bieżąca korekta UX jest lokalną zmianą na jeszcze nieopublikowanym BG-001A,
-który bazuje na BG-001 `522753413d8b4ac4baa0bd2b409a7a3f7ed0a5c6`.
-Kontrolki strony pojawiają się dopiero przy dodatniej liczbie wykryć i znikają
-po powrocie do zera; panel oraz analiza w tle działają bez zmian. Etap nie
-zmienia detektorów, reguł maskowania, uprawnień ani granicy danych. Lokalnie
-zaliczono typecheck, pełne 328/328, build i kontrolę diffu. Zdalne CI oraz ręczny
-odbiór w Chrome i Edge oczekują.
+Bieżący etap udostępnia lokalny skrót `[•••]` dla nowego poprawnego zaznaczenia
+także przy schowanym panelu i bez wykryć automatycznych. Zamknięcie panelu nadal
+unieważnia stare zaznaczenie, sesję, cofanie i uprawnienia portu; wybór po
+zamknięciu tworzy nowy rekord. Detektory, reguły maskowania i komunikaty panelu
+pozostają bez zmian. Lokalne typecheck, 329/329 testów, build i kontrola diffu
+przeszły; zdalne CI i ręczny odbiór Chrome/Edge nadal oczekują.

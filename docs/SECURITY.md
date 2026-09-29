@@ -55,9 +55,12 @@ a następnie korzysta z tej samej ścieżki pojedynczego zapisu i cofania.
 Pomocnicza kontrolka `[•••]` jest statycznym elementem dodanym do DOM strony
 przez content script. Nie zawiera treści zaznaczenia ani identyfikatora w
 atrybutach DOM. Style i przycisk są w zamkniętym Shadow DOM, a obsługa odrzuca
-programowe zdarzenia bez `isTrusted`. Strona nadal może zauważyć host kontrolki,
-ukryć go, usunąć lub imitować jego wygląd, dlatego ikonka nie jest wskaźnikiem
-zaufania ani granicą bezpieczeństwa. Pełna kontrolka w panelu pozostaje dostępna.
+programowe zdarzenia bez `isTrusted`. Kontrolka działa także bez portu panelu,
+ale tylko dla nowego zaznaczenia w bieżącej sesji widocznej karty; przed zapisem
+ponownie sprawdza szkic, zakres i kontekst. Strona nadal może zauważyć host
+kontrolki, ukryć go, usunąć lub imitować jego wygląd, dlatego ikonka nie jest
+wskaźnikiem zaufania ani granicą bezpieczeństwa. Pełna kontrolka w panelu
+pozostaje dostępna.
 
 Przy schowanym panelu i dodatniej liczbie wykryć content script dodaje osobny
 licznik i dymek w zamkniętym Shadow DOM. Przy pustym szkicu, zwykłym tekście,
@@ -67,11 +70,13 @@ podglądów, typów wykryć, identyfikatorów ani URL. Aktywacja wymaga `isTrust
 Strona może host ukryć, usunąć lub imitować, więc licznik również nie jest
 kontrolką bezpieczeństwa.
 
-Prawo do decyzji jest związane z jednym bieżącym, zweryfikowanym portem panelu
+Prawo do decyzji z panelu jest związane z jednym bieżącym, zweryfikowanym portem
 i jego komunikatem `READY`. Poprawny sygnał `CLOSED` odbiera je lokalnie od
 razu oraz unieważnia sesję szkicu, zaznaczenie i cofanie; nie czeka na fizyczne
-rozłączenie portu. Spóźnione `READY` i `onDisconnect` starego portu nie mogą
-zmienić stanu nowszego połączenia.
+rozłączenie portu. Nowe zaznaczenie po zamknięciu panelu może utworzyć nowy
+lokalny rekord dla `[•••]`, bez przywracania uprawnień staremu portowi.
+Spóźnione `READY` i `onDisconnect` starego portu nie mogą zmienić stanu nowszego
+połączenia.
 
 Service worker nadaje sygnałom widoczności losowy identyfikator swojej
 instancji i rosnący numer kolejny. Osobna generacja dla każdego okna odrzuca
@@ -96,8 +101,9 @@ Przed pierwszym zapisem DOM podmiana nie zachodzi, gdy:
 - struktura `contenteditable` wykracza poza obsługiwane akapity `p`/`div`, `br`
   i jawnie dozwolone elementy liniowe,
 - decyzja ma nieznany typ lub dodatkowe pola,
-- nadawca nie jest panelem bieżącego rozszerzenia,
-- port panelu nie jest bieżący, potwierdzony przez `READY` i widoczny,
+- komenda panelu nie pochodzi z bieżącego panelu rozszerzenia potwierdzonego
+  przez `READY` i widocznego albo lokalna akcja `[•••]` nie pochodzi z
+  zaufanego kliknięcia bieżącej kontrolki,
 - identyfikator sesji lub wersja decyzji nie odpowiada bieżącemu szkicowi,
 - zbiorcza decyzja nie odpowiada dokładnie aktualnej liście propozycji,
 - bieżący zakres nie zawiera wcześniej wykrytej wartości,

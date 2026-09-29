@@ -28,7 +28,8 @@ lub zamaskować.
 8. „Maskuj zaznaczenie” zastępuje dokładnie jeden aktualnie zaznaczony fragment
    ogólnym oznaczeniem `[DANE_N]`, również gdy detektory niczego nie znalazły.
 9. Przy poprawnym zaznaczeniu nad prawą krawędzią edytora pojawia się mały skrót
-   `[•••]`, uruchamiający dokładnie tę samą ręczną operację.
+   `[•••]` także przy schowanym panelu, uruchamiający dokładnie tę samą ręczną
+   operację.
 10. „Schowaj” zamyka panel, ale pozostawia lokalną analizę na widocznej karcie.
     Licznik i dymek pojawiają się tylko przy dodatniej liczbie wykryć; dymek
     pokazuje wyłącznie bieżącą liczbę propozycji i akcję „Sprawdź”. Zamknięcie
@@ -39,8 +40,9 @@ Panel pokazuje u góry kompaktowy stan połączenia z ChatGPT, a potem sekcję
 obsługiwanych danych — „Brak wykryć”. Komunikat operacji i „Cofnij” pojawiają
 się tylko wtedy, gdy są potrzebne. Pod listą pozostaje pomocnicze „Maskuj
 zaznaczenie” oraz stała informacja, że strona ChatGPT ma dostęp do wpisanego
-tekstu. Po schowaniu panelu jego funkcje decyzyjne i `[•••]` są wyłączone;
-licznik służy tylko do ponownego otwarcia panelu, gdy istnieją wykrycia.
+tekstu. Po schowaniu panelu stare decyzje panelu są unieważniane, ale nowe
+zaznaczenie może pokazać `[•••]` nawet bez wykryć. Licznik pojawia się tylko
+przy wykryciach i służy do ponownego otwarcia panelu.
 
 Aby zamaskować fragment ręcznie, zaznacz go myszą albo klawiaturą w polu
 wiadomości, a następnie kliknij `[•••]` przy edytorze albo „Maskuj zaznaczenie”
@@ -56,6 +58,8 @@ cofnięciu przywrócone dane ponownie pojawiają się jako propozycje, ale drugi
 cofnięcie nie jest dostępne. Zapisane zaznaczenie wygasa po edycji, innym
 maskowaniu, cofnięciu, wysłaniu, zmianie szkicu, rozmowy, karty lub pola. Powrót
 do identycznego tekstu nie przywraca starego wyboru.
+Ręczne maskowanie przez `[•••]` przy schowanym panelu nie udostępnia akcji
+„Cofnij”: ponowne otwarcie panelu rozpoczyna nową sesję i usuwa poprzedni rekord.
 
 Oryginał potrzebny do cofnięcia istnieje tymczasowo wyłącznie w pamięci content
 scriptu aktywnego szkicu. Nie jest przekazywany do panelu ani zapisywany w
@@ -231,8 +235,10 @@ cyfr, a następnie zbiorcze maskowanie dwóch jawnych pól i dokładne „Cofnij
     `[JSON]`, nie może zostać uznany za oznaczenie promptMask.
 17. Sprawdź, że `[•••]` pojawia się nad prawą krawędzią edytora tylko dla
     poprawnego zaznaczenia, nie zasłania tekstu, działa myszą i klawiaturą oraz
-    znika po użyciu albo unieważnieniu wyboru. Panel powinien pokazać ten sam
-    sukces i „Cofnij”.
+    znika po użyciu albo unieważnieniu wyboru. Powtórz przy schowanym panelu i
+    tekście bez wykryć, także przed pierwszym otwarciem panelu. Po schowaniu
+    stare zaznaczenie ma wygasnąć, a nowe ma pokazać skrót. Panel po otwartej
+    operacji powinien pokazać ten sam sukces i „Cofnij”.
 18. Powtórz odbiór osobno w drugiej przeglądarce.
 
 Testy automatyczne używają atrapy DOM. Rzeczywisty odbiór trzeba wykonać osobno
