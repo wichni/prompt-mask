@@ -3,8 +3,8 @@
 Rozszerzenie Chromium, które lokalnie analizuje tekst wpisywany w natywnym
 edytorze ChatGPT także przy schowanym panelu. Dyskretny licznik przy edytorze
 pojawia się dopiero po wykryciu co najmniej jednego fragmentu i sygnalizuje
-liczbę propozycji. Użytkownik otwiera panel dopiero wtedy, gdy chce je sprawdzić
-lub zamaskować.
+liczbę propozycji. Przyciski obok pozwalają zamaskować wszystkie wykrycia
+jednego typu bez otwierania panelu.
 
 ## Działa obecnie
 
@@ -12,9 +12,11 @@ lub zamaskować.
 2. Content script lokalnie analizuje bieżący tekst.
 3. Panel pokazuje możliwy PESEL, adres e-mail, polski numer telefonu albo
    wartość jawnego pola `patientName`, `patientFirstName`, `patientLastName`,
-   `patientId`, `password`, `client_secret`, `api_key` lub `apiToken` w JSON i
-   formacie `klucz=wartość`. Rozpoznaje też wartość nagłówka
-   `Authorization: Bearer` i hasło w URI z jawnym `scheme://user:password@host`.
+   `patientId`, `password`, `client_secret`, `api_key` lub `apiToken` w JSON,
+   obiekcie z niecytowanym kluczem i cytowaną wartością (np.
+   `{patientName:"Iga Modelowa"}`) albo formacie `klucz=wartość`. Rozpoznaje też
+   wartość nagłówka `Authorization: Bearer` i hasło w URI z jawnym
+   `scheme://user:password@host`.
    Dokładne pole `pesel` może otrzymać propozycję także wtedy, gdy jego
    11-cyfrowa wartość nie przechodzi walidacji daty lub sumy kontrolnej.
 4. „Maskuj” zastępuje wyłącznie aktualny wykryty zakres oznaczeniem, np.
@@ -31,8 +33,9 @@ lub zamaskować.
    `[•••]` także przy schowanym panelu, uruchamiający dokładnie tę samą ręczną
    operację.
 10. „Schowaj” zamyka panel, ale pozostawia lokalną analizę na widocznej karcie.
-    Licznik i dymek pojawiają się tylko przy dodatniej liczbie wykryć; dymek
-    pokazuje wyłącznie bieżącą liczbę propozycji i akcję „Sprawdź”. Zamknięcie
+    Przy wykryciach pojawia się pasek z licznikiem i przyciskami typu, np.
+    „Telefon · 2” lub „E-mail · 1”. Kliknięcie typu maskuje wszystkie jego
+    bieżące wystąpienia jednym zapisem. Licznik otwiera panel. Zamknięcie panelu
     od razu unieważnia poprzednią sesję, zaznaczenie i możliwość cofnięcia.
 
 Panel pokazuje u góry kompaktowy stan połączenia z ChatGPT, a potem sekcję
@@ -41,8 +44,8 @@ obsługiwanych danych — „Brak wykryć”. Komunikat operacji i „Cofnij” 
 się tylko wtedy, gdy są potrzebne. Pod listą pozostaje pomocnicze „Maskuj
 zaznaczenie” oraz stała informacja, że strona ChatGPT ma dostęp do wpisanego
 tekstu. Po schowaniu panelu stare decyzje panelu są unieważniane, ale nowe
-zaznaczenie może pokazać `[•••]` nawet bez wykryć. Licznik pojawia się tylko
-przy wykryciach i służy do ponownego otwarcia panelu.
+zaznaczenie może pokazać `[•••]` nawet bez wykryć. Pasek pokazuje wyłącznie
+liczniki typów i stałe nazwy; nie pokazuje wykrytych wartości.
 
 Aby zamaskować fragment ręcznie, zaznacz go myszą albo klawiaturą w polu
 wiadomości, a następnie kliknij `[•••]` przy edytorze albo „Maskuj zaznaczenie”
@@ -50,16 +53,17 @@ w panelu. Obie kontrolki korzystają z tej samej operacji. Jedna operacja zmieni
 tylko jedno wskazane wystąpienie. Pusty wybór, same białe znaki oraz zakres
 nachodzący na oznaczenie utworzone przez promptMask są odrzucane.
 
-Cofanie ma jeden poziom i działa tylko tak długo, jak użytkownik nie schował
-panelu, nie zmienił szkicu, pola, rozmowy ani aktywnej karty i nie wysłał
-wiadomości. Nowe udane
-maskowanie — także ręczne — zastępuje poprzednią możliwość cofnięcia. Po
-cofnięciu przywrócone dane ponownie pojawiają się jako propozycje, ale drugie
+Cofanie ma jeden poziom w bieżącej sesji szkicu. Zamknięcie panelu usuwa
+dotychczasowy rekord; kolejna lokalna podmiana może utworzyć nowy. Edycja
+szkicu, zmiana pola, rozmowy lub aktywnej karty oraz wysłanie wiadomości
+unieważniają cofanie. Nowe udane maskowanie — także ręczne — zastępuje
+poprzednią możliwość cofnięcia. Po cofnięciu przywrócone dane ponownie pojawiają
+się jako propozycje, ale drugie
 cofnięcie nie jest dostępne. Zapisane zaznaczenie wygasa po edycji, innym
 maskowaniu, cofnięciu, wysłaniu, zmianie szkicu, rozmowy, karty lub pola. Powrót
-do identycznego tekstu nie przywraca starego wyboru.
-Ręczne maskowanie przez `[•••]` przy schowanym panelu nie udostępnia akcji
-„Cofnij”: ponowne otwarcie panelu rozpoczyna nową sesję i usuwa poprzedni rekord.
+do identycznego tekstu nie przywraca starego wyboru. Po maskowaniu przy
+schowanym panelu pasek udostępnia lokalne „Cofnij”, także gdy nie zostały żadne
+wykrycia. Otwarcie panelu rozpoczyna nową sesję i usuwa ten rekord.
 
 Oryginał potrzebny do cofnięcia istnieje tymczasowo wyłącznie w pamięci content
 scriptu aktywnego szkicu. Nie jest przekazywany do panelu ani zapisywany w
@@ -105,34 +109,53 @@ odpowiednik znajdują się w [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md#continu
 Po kolejnym buildzie kliknij „Odśwież” na karcie rozszerzenia, a następnie
 odśwież stronę ChatGPT.
 
+## Paczka konkursowa
+
+Lokalny pakiet `release/promptMask-konkurs-0.1.0-2026-10-05.zip` zawiera gotowe
+rozszerzenie w folderze `rozszerzenie`, dokumentację PDF i trzy pliki TXT:
+[opis projektu](docs/contest/OPIS-PROJEKTU.txt),
+[instrukcję instalacji i użycia](docs/contest/INSTRUKCJA.txt) oraz
+[scenariusz demonstracji](docs/contest/SCENARIUSZ-DEMONSTRACJI.txt).
+Materiały są samodzielnym opisem wersji paczki dla odbiorcy bez repozytorium;
+przy kolejnej paczce trzeba porównać je z aktualnym kodem i dokumentami.
+
+ZIP jest lokalnym artefaktem, nie jest śledzony przez Git. Zawiera build stanu
+roboczego, a nie wyłącznie ostatni commit. Nie zawiera `node_modules`, `.git`
+ani kodu źródłowego projektu. Regulamin konkursu może osobno wymagać źródeł.
+
+Aby ręcznie przygotować kolejną paczkę, wykonaj kontrole z sekcji build,
+utwórz nowy folder pakietu, skopiuj do jego podfolderu `rozszerzenie` całą
+zawartość świeżego `dist`, a obok dodaj aktualne materiały z `docs/contest`.
+Dokument PDF w bieżącym ZIP-ie jest eksportem tych samych plików TXT, nie
+odrębnym źródłem treści. Spakuj cały folder pakietu. Przed przekazaniem
+sprawdź zawartość archiwum i instalację z rozpakowanego katalogu zgodnie
+z dołączoną instrukcją. Sam build nie potwierdza odbioru w Chrome lub Edge.
+
 ## Ręczny odbiór bieżącego etapu
 
 Używaj wyłącznie danych utworzonych na potrzeby testu.
 
-Najpierw odbierz poprawkę BG-001A na bazie BG-001 w Chrome 142 lub nowszym:
+Najpierw odbierz pasek przy edytorze w Chrome 142 lub nowszym:
 
 1. Po F5, bez otwierania panelu, sprawdź pusty szkic i zwykły tekst — kontrolka
-   promptMask nie może być widoczna. Wpisz `email=qa@example.com`; dopiero wtedy
-   sprawdź licznik, dymek i zachowanie fokusu edytora. Usuń e-mail: obie
-   kontrolki mają zniknąć. Zmniejsz i zwiększ okno: po ponownym wykryciu mają
-   pozostać przy edytorze i wewnątrz viewportu; przy braku miejsca nad polem
-   powinny przejść pod nie.
-2. Przy widocznym dymku usuń fragmenty tak, aby licznik zmienił się z 3 na 1,
-   a następnie ponownie zwiększ wynik. Treść ma aktualizować się od razu bez
-   ponownego otwarcia i bez przedłużenia pierwotnego czasu wyświetlania. Wynik 0
-   ma ukryć dymek. Po ręcznym zamknięciu ten sam wynik nie powinien go ponawiać.
-3. Ustaw fokus kolejno na „Sprawdź” i zamknięciu, wyjedź kursorem poza dymek i
-   odczekaj ponad 6 sekund. Dymek nie może zniknąć, dopóki fokus pozostaje w
-   środku. Sprawdź też Tab, Escape i niezależne wejście/wyjście kursorem.
-4. Otwórz panel kolejno przez „Sprawdź”, licznik i ikonę rozszerzenia.
-5. Sprawdź pojedyncze, zbiorcze i ręczne maskowanie oraz dokładne „Cofnij”.
-6. Użyj „Schowaj” i natywnego X. W obu przypadkach analiza ma działać dalej,
+   promptMask nie może być widoczna. Wpisz `email=qa@example.com`: powinny
+   pojawić się licznik i „E-mail · 1”. Usuń adres: pasek ma zniknąć.
+2. Wpisz dwa syntetyczne numery telefonu i jeden e-mail. Kliknij „Telefon · 2”:
+   oba numery mają zostać zastąpione, a e-mail pozostać. Użyj lokalnego „Cofnij”
+   i sprawdź dokładny powrót szkicu. Powtórz dla PESEL-u i innych obsługiwanych
+   typów w syntetycznych danych.
+3. Zaznacz tekst przy widocznym pasku. `[•••]` i pasek nie mogą na siebie
+   nachodzić. Sprawdź szerokie i wąskie okno, zoom, zmianę rozmiaru, wybór
+   myszą i klawiaturą oraz położenie kontrolek przy krawędziach viewportu.
+4. Otwórz panel przez licznik i ikonę rozszerzenia. Sprawdź pojedyncze,
+   zbiorcze i ręczne maskowanie oraz dokładne „Cofnij”.
+5. Użyj „Schowaj” i natywnego X. W obu przypadkach analiza ma działać dalej,
    a po ponownym otwarciu stare „Cofnij” i sukces nie mogą wrócić.
-7. Szybko zamykaj i otwieraj panel na dwóch kartach oraz w dwóch oknach. Stary
+6. Szybko zamykaj i otwieraj panel na dwóch kartach oraz w dwóch oknach. Stary
    panel nie może wykonać maskowania ani cofnięcia, a opóźnione zamknięcie nie
    może odebrać uprawnień nowszemu panelowi.
-8. Powtórz po zmianie rozmowy, F5, przejściu na inną domenę i powrocie.
-9. Sprawdź uśpienie lub diagnostyczny restart workera, klawiaturę, zoom, wąski
+7. Powtórz po zmianie rozmowy, F5, przejściu na inną domenę i powrocie.
+8. Sprawdź uśpienie lub diagnostyczny restart workera, klawiaturę, zoom, wąski
    panel, limit tekstu i brak edytora.
 
 Zapisz wersję Chrome i systemu. Edge wymaga oddzielnego odbioru; testy
@@ -156,6 +179,11 @@ Swobodne zdanie `Pacjentka Żaneta Próba` nie powinno zostać automatycznie
 zaklasyfikowane jako nazwa pacjenta. Niejednoznaczne `patientName=Jan Testowy`
 bez cudzysłowów również ma pozostać bez automatycznej propozycji. Samo słowo
 `password` bez wartości nie jest wykryciem.
+
+Sprawdź także `{patientName:"Iga Modelowa"}`: nazwa klucza bez cudzysłowów
+powinna dać jedną propozycję „Imię i nazwisko pacjenta”. Po maskowaniu zmienia
+się tylko wartość, a składnia obiektu pozostaje na miejscu. Alias
+`{otherPatientName:"Iga Modelowa"}` nie powinien być wykryciem tego typu.
 
 Dla sekretów technicznych użyj syntetycznego tekstu:
 

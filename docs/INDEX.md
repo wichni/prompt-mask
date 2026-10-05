@@ -10,6 +10,7 @@ Ten indeks służy do wczytywania tylko potrzebnego kontekstu.
 | Syntetyczny korpus medyczny i wyniki detekcji | [`MEDICAL_EVALUATION.md`](MEDICAL_EVALUATION.md) |
 | Implementacja, testy, etapy i praca z kontekstem | [`DEVELOPMENT.md`](DEVELOPMENT.md) |
 | Instalacja i użycie | [`../README.md`](../README.md) |
+| Materiały dołączane do paczki konkursowej | [`contest/OPIS-PROJEKTU.txt`](contest/OPIS-PROJEKTU.txt), [`contest/INSTRUKCJA.txt`](contest/INSTRUKCJA.txt), [`contest/SCENARIUSZ-DEMONSTRACJI.txt`](contest/SCENARIUSZ-DEMONSTRACJI.txt) |
 | Reguły pracy agenta | [`../AGENTS.md`](../AGENTS.md) |
 
 Mapa odpowiedzialności katalogów znajduje się w

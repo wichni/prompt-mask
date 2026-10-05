@@ -1,56 +1,66 @@
-import { NoticeScheduler } from "./notice-scheduler";
+import type { DetectionKind } from "../../core/detection";
+import type { DraftSessionId } from "../../platform/chromium/messages";
 import { calculateNoticePosition } from "./notice-position";
-import { ToastInteractionController } from "./toast-interaction-controller";
+import { createCategoryButtons } from "./page-category-buttons";
+import type { KindCount } from "./page-control-kinds";
 
 const HOST_ID = "prompt-mask-background-notice";
 const NOTICE_STYLES = `
   :host { color: #18334f; font: 13px/1.4 ui-sans-serif, system-ui, sans-serif; }
-  button { font: inherit; pointer-events: auto; }
-  .counter { float: right; min-height: 34px; padding: 0 12px; border: 1px solid #005eb8; border-radius: 9px; background: #fff; box-shadow: 0 4px 14px rgba(0,40,80,.18); color: #005eb8; cursor: pointer; font-weight: 750; }
-  .toast { box-sizing: border-box; position: absolute; right: 0; bottom: calc(100% + 6px); display: grid; grid-template-columns: minmax(0,1fr) auto auto; gap: 8px; align-items: center; width: 100%; padding: 10px; overflow: auto; border: 1px solid #dce7f2; border-radius: 10px; background: #fff; box-shadow: 0 8px 24px rgba(0,40,80,.2); pointer-events: auto; }
-  .toast[hidden] { display: none; }
-  .toast.below { top: calc(100% + 6px); bottom: auto; }
-  .toast.compact { grid-template-columns: minmax(0,1fr) auto; }
-  .toast.compact .review { grid-column: 1 / -1; grid-row: 2; }
-  .toast button { min-height: 32px; border: 1px solid #005eb8; border-radius: 7px; background: #fff; color: #005eb8; cursor: pointer; font-weight: 700; }
-  .toast .close { width: 32px; padding: 0; font-size: 20px; }
+  .bar { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; pointer-events: none; }
+  .categories { display: flex; flex: 0 1 auto; flex-wrap: wrap; justify-content: flex-end; gap: 6px; min-width: 0; }
+  button { min-height: 34px; padding: 0 10px; border: 1px solid #005eb8; border-radius: 9px; background: #fff; box-shadow: 0 4px 14px rgba(0,40,80,.18); color: #005eb8; cursor: pointer; font: 700 13px/1.2 ui-sans-serif, system-ui, sans-serif; pointer-events: auto; }
+  .counter { font-weight: 750; }
+  .feedback { box-sizing: border-box; width: 100%; padding: 7px 10px; border-radius: 8px; background: #fff; color: #18334f; box-shadow: 0 4px 14px rgba(0,40,80,.18); pointer-events: auto; }
+  .feedback[hidden], button[hidden] { display: none; }
   button:hover { background: #edf5ff; }
   button:focus-visible { outline: 3px solid #004a91; outline-offset: 2px; }
 `;
 
+export interface NoticeView {
+  sessionId: DraftSessionId;
+  revision: number;
+  categories: readonly KindCount[];
+}
+
+interface NoticeActions {
+  maskKind: (
+    kind: DetectionKind,
+    sessionId: DraftSessionId,
+    revision: number,
+  ) => boolean;
+  undo: (operationId: number) => boolean;
+}
+
 interface BackgroundNoticeOptions {
-  hideDelayMs?: number;
   isTrustedActivation?: (event: Event) => boolean;
+  onPositionChange?: () => void;
   shadowMode?: ShadowRootMode;
 }
 
-type ToastContent = "COUNT" | "OPEN_ERROR" | null;
-
 export class BackgroundNotice {
   private readonly host = document.createElement("div");
+  private readonly bar = document.createElement("div");
   private readonly counter = document.createElement("button");
-  private readonly toast = document.createElement("div");
-  private readonly toastMessage = document.createElement("span");
-  private readonly reviewButton = document.createElement("button");
-  private readonly closeButton = document.createElement("button");
-  private readonly scheduler: NoticeScheduler;
-  private readonly hideDelayMs: number;
+  private readonly categories = document.createElement("div");
+  private readonly undoButton = document.createElement("button");
+  private readonly feedback = document.createElement("div");
   private readonly isTrustedActivation: (event: Event) => boolean;
-  private interaction!: ToastInteractionController;
+  private readonly onPositionChange: () => void;
   private composer: HTMLElement | null = null;
-  private detectionCount = 0;
+  private view: NoticeView | null = null;
+  private undoOperationId: number | null = null;
   private mounted = false;
   private panelVisible = false;
-  private toastContent: ToastContent = null;
 
   constructor(
     private readonly openPanel: () => Promise<boolean>,
+    private readonly actions: NoticeActions,
     options: BackgroundNoticeOptions = {},
   ) {
-    this.hideDelayMs = options.hideDelayMs ?? 6_000;
     this.isTrustedActivation =
       options.isTrustedActivation ?? ((event) => event.isTrusted);
-    this.scheduler = new NoticeScheduler(this.showToast);
+    this.onPositionChange = options.onPositionChange ?? (() => {});
     this.configureHost(options.shadowMode ?? "closed");
   }
 
@@ -66,51 +76,44 @@ export class BackgroundNotice {
     if (!this.mounted && !this.host.isConnected) return;
     window.removeEventListener("resize", this.reposition);
     window.removeEventListener("scroll", this.reposition, true);
-    this.scheduler.reset(null, true);
-    this.hideToast();
     this.host.remove();
     this.composer = null;
-    this.detectionCount = 0;
+    this.view = null;
+    this.undoOperationId = null;
     this.mounted = false;
   }
 
   setPanelVisible(visible: boolean): void {
     this.panelVisible = visible;
-    if (visible) {
-      this.scheduler.reset();
-      this.hidePageControls(this.composer);
-    }
+    if (visible) this.hidePageControls();
   }
 
-  showSearching(composer: HTMLElement | null, resetPolicy = false): void {
-    if (resetPolicy) this.scheduler.reset();
-    else this.scheduler.cancelPending();
-    this.detectionCount = 0;
-    this.hidePageControls(composer);
+  showSearching(composer: HTMLElement | null): void {
+    this.composer = composer;
+    this.view = null;
+    this.undoOperationId = null;
+    this.hidePageControls();
   }
 
-  showReady(composer: HTMLElement, count: number, baseline = false): void {
-    this.detectionCount = Math.max(0, count);
-    if (count <= 0) {
-      this.scheduler.update(count, baseline || this.panelVisible);
-      this.hidePageControls(composer);
-      return;
-    }
-    this.showCounter(
-      composer,
-      String(count),
-      `${count} ${count === 1 ? "fragment" : "fragmenty"} do sprawdzenia.`,
-    );
-    if (!this.toast.hidden && this.toastContent === "COUNT") {
-      this.setCountMessage(count);
-    }
-    this.scheduler.update(count, baseline || this.panelVisible);
+  showReady(composer: HTMLElement, view: NoticeView): void {
+    this.composer = composer;
+    this.view = view;
+    this.clearFeedback();
+    this.render();
   }
 
   showUnavailable(composer: HTMLElement | null): void {
-    this.scheduler.reset();
-    this.detectionCount = 0;
-    this.hidePageControls(composer);
+    this.showSearching(composer);
+  }
+
+  showUndo(operationId: number): void {
+    this.undoOperationId = operationId;
+    this.render();
+  }
+
+  clearUndo(): void {
+    this.undoOperationId = null;
+    this.render();
   }
 
   get element(): HTMLDivElement {
@@ -121,137 +124,133 @@ export class BackgroundNotice {
     return this.counter;
   }
 
-  get notification(): HTMLDivElement {
-    return this.toast;
+  get occupiedRect(): DOMRect | null {
+    return this.host.style.display === "none"
+      ? null
+      : this.host.getBoundingClientRect();
   }
 
   private configureHost(shadowMode: ShadowRootMode): void {
     this.host.id = HOST_ID;
     this.host.style.cssText =
-      "display:none;position:fixed;z-index:2147483645;width:min(320px,calc(100vw - 16px));height:34px;pointer-events:none;";
+      "display:none;position:fixed;z-index:2147483645;pointer-events:none;";
     const shadow = this.host.attachShadow({ mode: shadowMode });
-    this.interaction = new ToastInteractionController(
-      this.toast,
-      shadow,
-      this.hideDelayMs,
-      () => this.hideToast(),
-    );
     const style = document.createElement("style");
     style.textContent = NOTICE_STYLES;
+    this.bar.className = "bar";
     this.counter.type = "button";
     this.counter.className = "counter";
     this.counter.addEventListener("click", this.handleOpen);
-    this.toast.className = "toast";
-    this.toast.hidden = true;
-    this.toast.setAttribute("role", "status");
-    this.toast.setAttribute("aria-live", "polite");
-    this.reviewButton.type = "button";
-    this.reviewButton.className = "review";
-    this.reviewButton.textContent = "Sprawdź";
-    this.reviewButton.addEventListener("click", this.handleOpen);
-    this.closeButton.type = "button";
-    this.closeButton.className = "close";
-    this.closeButton.textContent = "×";
-    this.closeButton.setAttribute("aria-label", "Zamknij powiadomienie");
-    this.closeButton.addEventListener("click", this.handleDismiss);
-    this.toast.addEventListener("mouseenter", this.interaction.handleMouseEnter);
-    this.toast.addEventListener("mouseleave", this.interaction.handleMouseLeave);
-    this.toast.addEventListener("focusin", this.interaction.handleFocusIn);
-    this.toast.addEventListener("focusout", this.interaction.handleFocusOut);
-    this.toast.addEventListener("keydown", this.handleKeyDown);
-    this.toast.append(this.toastMessage, this.reviewButton, this.closeButton);
-    shadow.append(style, this.toast, this.counter);
+    this.categories.className = "categories";
+    this.undoButton.type = "button";
+    this.undoButton.className = "undo";
+    this.undoButton.textContent = "Cofnij";
+    this.undoButton.addEventListener("click", this.handleUndo);
+    this.feedback.className = "feedback";
+    this.feedback.setAttribute("role", "status");
+    this.feedback.setAttribute("aria-live", "polite");
+    this.feedback.hidden = true;
+    this.bar.append(
+      this.counter,
+      this.categories,
+      this.undoButton,
+      this.feedback,
+    );
+    shadow.append(style, this.bar);
   }
 
-  private showCounter(
-    composer: HTMLElement | null,
-    value: string,
-    status: string,
-  ): void {
-    this.composer = composer;
-    if (!composer || this.panelVisible) {
-      this.host.style.display = "none";
+  private render(): void {
+    const total =
+      this.view?.categories.reduce((sum, item) => sum + item.count, 0) ?? 0;
+    if (
+      !this.composer ||
+      this.panelVisible ||
+      (total === 0 && this.undoOperationId === null)
+    ) {
+      this.hidePageControls();
       return;
     }
     this.mount();
-    this.counter.textContent = `promptMask · ${value}`;
-    this.counter.setAttribute("aria-label", `${status} Otwórz panel promptMask.`);
+    this.counter.hidden = total === 0;
+    this.counter.textContent = total > 0 ? `promptMask · ${total}` : "";
+    this.counter.setAttribute(
+      "aria-label",
+      total > 0 ? `Wykryte fragmenty: ${total}. Otwórz panel promptMask.` : "",
+    );
+    this.categories.replaceChildren(
+      ...createCategoryButtons(
+        this.view,
+        this.isTrustedActivation,
+        this.actions.maskKind,
+        () =>
+          this.showFeedback("Nie udało się zamaskować. Sprawdź aktualny tekst."),
+      ),
+    );
+    this.undoButton.hidden = this.undoOperationId === null;
     this.host.style.display = "block";
     this.reposition();
   }
 
-  private readonly showToast = (count: number): void => {
-    if (this.panelVisible || !this.composer || document.hidden) return;
-    if (!this.toast.hidden && this.toastContent === "OPEN_ERROR") return;
-    this.toastContent = "COUNT";
-    this.setCountMessage(count);
-    this.toast.hidden = false;
-    this.reposition();
-    this.interaction.schedule();
-  };
-
-  private hideToast(): void {
-    this.interaction.reset();
-    this.toast.hidden = true;
-    this.toastContent = null;
-  }
-
-  private hidePageControls(composer: HTMLElement | null): void {
-    this.composer = composer;
-    this.hideToast();
+  private hidePageControls(): void {
     this.host.style.display = "none";
+    this.clearFeedback();
+    this.onPositionChange();
   }
 
-  private setCountMessage(count: number): void {
-    this.toastMessage.textContent = `Wykryto fragmenty do sprawdzenia: ${count}`;
+  private clearFeedback(): void {
+    this.feedback.hidden = true;
+    this.feedback.textContent = "";
+  }
+
+  private showFeedback(message: string): void {
+    if (this.host.style.display === "none") return;
+    this.feedback.textContent = message;
+    this.feedback.hidden = false;
+    this.reposition();
   }
 
   private readonly handleOpen = (event: Event): void => {
     if (!this.isTrustedActivation(event)) return;
-    this.hideToast();
+    const requestView = this.view;
     void this.openPanel().then((opened) => {
       if (
-        opened ||
-        this.panelVisible ||
-        !this.composer ||
-        this.detectionCount <= 0
+        !opened &&
+        !this.panelVisible &&
+        this.view === requestView &&
+        this.host.style.display !== "none"
       ) {
-        return;
+        this.showFeedback(
+          "Nie udało się otworzyć panelu. Użyj ikony rozszerzenia.",
+        );
       }
-      this.toastContent = "OPEN_ERROR";
-      this.toastMessage.textContent =
-        "Nie udało się otworzyć panelu. Użyj ikony rozszerzenia.";
-      this.toast.hidden = false;
-      this.interaction.schedule();
     });
   };
 
-  private readonly handleDismiss = (event: Event): void => {
-    if (!this.isTrustedActivation(event)) return;
-    this.hideToast();
-    this.counter.focus({ preventScroll: true });
-  };
-
-  private readonly handleKeyDown = (event: KeyboardEvent): void => {
-    if (event.key !== "Escape" || !this.isTrustedActivation(event)) return;
-    event.stopPropagation();
-    this.hideToast();
-    this.counter.focus({ preventScroll: true });
+  private readonly handleUndo = (event: Event): void => {
+    if (!this.isTrustedActivation(event) || this.undoOperationId === null) return;
+    if (!this.actions.undo(this.undoOperationId)) {
+      this.showFeedback("Nie udało się cofnąć. Szkic mógł się zmienić.");
+    }
   };
 
   private readonly reposition = (): void => {
     if (!this.composer || this.host.style.display === "none") return;
     const rect = this.composer.getBoundingClientRect();
+    const width = calculateNoticePosition(
+      rect,
+      window.innerWidth,
+      window.innerHeight,
+      34,
+    ).width;
+    this.host.style.width = `${width}px`;
     const position = calculateNoticePosition(
       rect,
       window.innerWidth,
       window.innerHeight,
+      this.host.offsetHeight || 34,
     );
-    this.host.style.width = `${position.width}px`;
     this.host.style.left = `${position.left}px`;
     this.host.style.top = `${position.top}px`;
-    this.toast.style.maxHeight = `${position.toastMaxHeight}px`;
-    this.toast.classList.toggle("below", position.toastBelow);
-    this.toast.classList.toggle("compact", position.compact);
+    this.onPositionChange();
   };
 }

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { DetectionKind } from "../src/core/detection";
 import {
   PANEL_CONTENT_PORT,
   type AnalysisSnapshot,
@@ -14,22 +15,34 @@ import {
 } from "../src/platform/chromium/side-panel-signals";
 
 const noticeMock = vi.hoisted(() => ({
+  pageActions: null as null | {
+    maskKind: (kind: DetectionKind, sessionId: string, revision: number) => boolean;
+    undo: (operationId: number) => boolean;
+  },
   mount: vi.fn(),
   unmount: vi.fn(),
   setPanelVisible: vi.fn(),
   showSearching: vi.fn(),
   showReady: vi.fn(),
   showUnavailable: vi.fn(),
+  showUndo: vi.fn(),
+  clearUndo: vi.fn(),
 }));
 
 vi.mock("../src/providers/chatgpt/background-notice", () => ({
   BackgroundNotice: class {
+    constructor(_openPanel: () => Promise<boolean>, actions: NonNullable<typeof noticeMock.pageActions>) {
+      noticeMock.pageActions = actions;
+    }
     mount = noticeMock.mount;
     unmount = noticeMock.unmount;
     setPanelVisible = noticeMock.setPanelVisible;
     showSearching = noticeMock.showSearching;
     showReady = noticeMock.showReady;
     showUnavailable = noticeMock.showUnavailable;
+    showUndo = noticeMock.showUndo;
+    clearUndo = noticeMock.clearUndo;
+    occupiedRect = null;
   },
 }));
 
@@ -143,7 +156,10 @@ const undoResults = (port: ReturnType<typeof createPort>): UndoResult[] =>
 
 beforeEach(async () => {
   vi.resetModules();
-  Object.values(noticeMock).forEach((mock) => mock.mockClear());
+  noticeMock.pageActions = null;
+  Object.values(noticeMock).forEach((mock) => {
+    if (typeof mock === "function") mock.mockClear();
+  });
   document
     .querySelectorAll("#prompt-mask-manual-shortcut")
     .forEach((element) => element.remove());
@@ -204,7 +220,65 @@ describe("native composer analysis", () => {
     textarea.dispatchEvent(new Event("input", { bubbles: true }));
 
     expect(createdPorts.size).toBe(0);
-    expect(noticeMock.showReady).toHaveBeenLastCalledWith(textarea, 1, false);
+    expect(noticeMock.showReady).toHaveBeenLastCalledWith(textarea, {
+      sessionId: expect.any(String),
+      revision: expect.any(Number),
+      categories: [{ kind: "EMAIL", count: 1 }],
+    });
+  });
+
+  it("masks every current phone from the page control and allows local undo", () => {
+    const textarea = document.querySelector<HTMLTextAreaElement>("textarea")!;
+    const original = "Kontakt 500 600 700, 501 602 703, qa@example.com";
+    textarea.value = original;
+    textarea.dispatchEvent(new Event("input", { bubbles: true }));
+    const view = noticeMock.showReady.mock.lastCall?.[1] as {
+      sessionId: string;
+      revision: number;
+      categories: { kind: DetectionKind; count: number }[];
+    };
+    expect(view.categories).toEqual([
+      { kind: "PHONE", count: 2 },
+      { kind: "EMAIL", count: 1 },
+    ]);
+
+    expect(noticeMock.pageActions?.maskKind("PHONE", view.sessionId, view.revision)).toBe(true);
+    expect(textarea.value).toBe("Kontakt [PHONE_1], [PHONE_2], qa@example.com");
+    expect(createdPorts.size).toBe(0);
+    expect(document.activeElement).toBe(textarea);
+    const operationId = noticeMock.showUndo.mock.lastCall?.[0] as number;
+    expect(noticeMock.pageActions?.undo(operationId)).toBe(true);
+    expect(textarea.value).toBe(original);
+  });
+
+  it("rejects a stale page-category action before changing the editor", () => {
+    const textarea = document.querySelector<HTMLTextAreaElement>("textarea")!;
+    textarea.value = "Kontakt 500 600 700";
+    textarea.dispatchEvent(new Event("input", { bubbles: true }));
+    const view = noticeMock.showReady.mock.lastCall?.[1] as {
+      sessionId: string;
+      revision: number;
+    };
+    textarea.value = "Kontakt 500 600 700 i dodatkowy tekst";
+
+    expect(noticeMock.pageActions?.maskKind("PHONE", view.sessionId, view.revision)).toBe(false);
+    expect(textarea.value).toBe("Kontakt 500 600 700 i dodatkowy tekst");
+    expect(noticeMock.showUndo).not.toHaveBeenCalled();
+  });
+
+  it("rejects a page-category action while the side panel is open", () => {
+    const textarea = document.querySelector<HTMLTextAreaElement>("textarea")!;
+    textarea.value = "Kontakt 500 600 700";
+    textarea.dispatchEvent(new Event("input", { bubbles: true }));
+    const view = noticeMock.showReady.mock.lastCall?.[1] as {
+      sessionId: string;
+      revision: number;
+    };
+    const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
+    connectPanel(panel);
+
+    expect(noticeMock.pageActions?.maskKind("PHONE", view.sessionId, view.revision)).toBe(false);
+    expect(textarea.value).toBe("Kontakt 500 600 700");
   });
 
   it("starts only for the trusted side panel", () => {
@@ -231,7 +305,11 @@ describe("native composer analysis", () => {
 
     hidden = false;
     document.dispatchEvent(new Event("visibilitychange"));
-    expect(noticeMock.showReady).toHaveBeenLastCalledWith(textarea, 1, true);
+    expect(noticeMock.showReady).toHaveBeenLastCalledWith(textarea, {
+      sessionId: expect.any(String),
+      revision: expect.any(Number),
+      categories: [{ kind: "EMAIL", count: 1 }],
+    });
   });
 
   it("does not accept panel commands before the panel view confirms visibility", () => {
@@ -547,6 +625,32 @@ describe("native composer analysis", () => {
       '{"patientName":"[PATIENT_NAME_1]","patientFirstName":"[PATIENT_FIRST_NAME_1]","patientLastName":"[PATIENT_LAST_NAME_1]","patientId":"[PATIENT_ID_1]","password":"[PASSWORD_1]","error":"E_17"}',
     );
     expect(() => JSON.parse(textarea.value)).not.toThrow();
+  });
+
+  it("masks an unquoted object key without forwarding its value", () => {
+    const textarea = document.querySelector<HTMLTextAreaElement>("textarea")!;
+    textarea.value = '{patientName:"Iga Modelowa", status:"ACTIVE"}';
+    const panel = createPort(`chrome-extension://${runtimeId}/side-panel.html`);
+    connectPanel(panel);
+    const snapshot = snapshots(panel).at(-1)!;
+
+    expect(snapshot.detections).toEqual([
+      expect.objectContaining({ kind: "PATIENT_NAME", maskedPreview: "•••" }),
+    ]);
+    expect(JSON.stringify(panel.postMessage.mock.calls)).not.toContain(
+      "Iga Modelowa",
+    );
+
+    panel.fireMessage({
+      type: "MASK_DETECTIONS",
+      sessionId: snapshot.sessionId,
+      revision: snapshot.revision,
+      detectionIds: snapshot.detections.map(({ id }) => id),
+    });
+
+    expect(textarea.value).toBe(
+      '{patientName:"[PATIENT_NAME_1]", status:"ACTIVE"}',
+    );
   });
 
   it("masks contextual secrets without forwarding them and restores them on undo", () => {

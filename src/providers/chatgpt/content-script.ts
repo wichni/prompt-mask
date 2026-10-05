@@ -1,6 +1,7 @@
-import type { SensitiveDetection } from "../../core/detection";
+import type { DetectionKind, SensitiveDetection } from "../../core/detection";
 import {
   createManualMaskingPlan,
+  createMaskingPlan,
   createMaskedPreview,
   type MaskingPlan,
 } from "../../core/masking";
@@ -45,14 +46,27 @@ import { ManualMaskShortcut } from "./manual-mask-shortcut";
 import { DraftSession } from "./draft-session";
 import { BackgroundNotice } from "./background-notice";
 import { ContentLifecycleController } from "./content-lifecycle";
+import { countDetectionKinds } from "./page-control-kinds";
 
 let activePanelPort: chrome.runtime.Port | null = null;
 let activePanelReady = false;
-const backgroundNotice = new BackgroundNotice(requestOpenSidePanel);
+const backgroundNotice = new BackgroundNotice(
+  requestOpenSidePanel,
+  {
+    maskKind: (kind, sessionId, requestRevision) =>
+      maskDetectionKind(kind, sessionId, requestRevision),
+    undo: (operationId) => {
+      if (panelVisible) return false;
+      const restored = undoMasking({ type: "UNDO_MASK", operationId });
+      if (restored) focusCurrentComposer();
+      return restored;
+    },
+  },
+  { onPositionChange: () => manualMaskShortcut?.refreshPosition() },
+);
 let lifecycle: ContentLifecycleController;
 let panelVisible = false;
 let selectionInteractionActive = false;
-let suppressNoticeOnce = false;
 let visibilitySourceId: string | null = null;
 let visibilitySequence = 0;
 const retiredVisibilitySources = new Set<string>();
@@ -91,6 +105,7 @@ const discardUndo = (
 ): void => {
   const record = undoRecord;
   undoRecord = null;
+  backgroundNotice.clearUndo();
   if (record && notify) {
     broadcast({
       type: "UNDO_INVALIDATED",
@@ -167,7 +182,7 @@ const scanComposer = (): void => {
     currentStructure = null;
     revision = 0;
     detections = [];
-    backgroundNotice.showSearching(nextComposer, true);
+    backgroundNotice.showSearching(nextComposer);
     if (hadSource) broadcast({ type: "HOST_STATUS", state: "SEARCHING" });
   }
 
@@ -201,10 +216,12 @@ const scanComposer = (): void => {
   }
   backgroundNotice.showReady(
     nextComposer,
-    detections.length,
-    suppressNoticeOnce || panelVisible,
+    {
+      sessionId: draftSession.sessionId,
+      revision,
+      categories: countDetectionKinds(detections),
+    },
   );
-  suppressNoticeOnce = false;
   broadcast({ type: "HOST_STATUS", state: "READY" });
   broadcast(createSnapshot());
 };
@@ -271,6 +288,15 @@ const hasCurrentComposerContext = (): boolean => {
     );
   } catch {
     return false;
+  }
+};
+
+const focusCurrentComposer = (): void => {
+  if (!composer || document.activeElement === composer) return;
+  try {
+    composer.focus({ preventScroll: true });
+  } catch {
+    // A failed focus change does not change a confirmed text operation.
   }
 };
 
@@ -387,6 +413,7 @@ const commitMaskingPlan = (
       previousCaret,
       count,
     );
+    if (!panelVisible) backgroundNotice.showUndo(operationId);
     return operationId;
   } catch {
     invalidateAfterUncertainWrite();
@@ -450,6 +477,45 @@ const maskDetections = (message: unknown): void => {
   });
 };
 
+const maskDetectionKind = (
+  kind: DetectionKind,
+  sessionId: string,
+  requestRevision: number,
+): boolean => {
+  if (
+    writeInProgress ||
+    panelVisible ||
+    lastHostStatus.state !== "READY" ||
+    sessionId !== draftSession.sessionId ||
+    requestRevision !== revision
+  ) {
+    return false;
+  }
+  try {
+    if (!hasCurrentComposerContext()) {
+      scanComposerSafely();
+      return false;
+    }
+    const requested = detections.filter((detection) => detection.kind === kind);
+    const plan = createMaskingPlan(currentText, requested);
+    const before = currentUndoDraftState();
+    if (!composer || !plan || !before) return false;
+    selectionController.discard();
+    const operationId = commitMaskingPlan(
+      plan,
+      before,
+      readComposerCaret(composer),
+      requested.length,
+    );
+    if (operationId === null) return false;
+    focusCurrentComposer();
+    return true;
+  } catch {
+    scanComposerSafely();
+    return false;
+  }
+};
+
 const broadcastManualMaskError = (
   command: ManualMaskCommand,
   error: "MASK_FAILED" | "STALE_SELECTION",
@@ -506,15 +572,18 @@ const maskSelection = (command: ManualMaskCommand): void => {
   });
 };
 
-manualMaskShortcut = new ManualMaskShortcut((selectionId) => {
-  const record = selectionController.record;
-  if (writeInProgress || !record || record.selectionId !== selectionId) {
-    selectionController.discard();
-    return;
-  }
-  broadcast({ type: "MANUAL_MASK_STARTED", selectionId });
-  maskSelection({ type: "MASK_SELECTION", selectionId });
-});
+manualMaskShortcut = new ManualMaskShortcut(
+  (selectionId) => {
+    const record = selectionController.record;
+    if (writeInProgress || !record || record.selectionId !== selectionId) {
+      selectionController.discard();
+      return;
+    }
+    broadcast({ type: "MANUAL_MASK_STARTED", selectionId });
+    maskSelection({ type: "MASK_SELECTION", selectionId });
+  },
+  { getAvoidRect: () => backgroundNotice.occupiedRect },
+);
 
 const broadcastUndoError = (command: UndoCommand): void => {
   broadcast({
@@ -525,7 +594,7 @@ const broadcastUndoError = (command: UndoCommand): void => {
   });
 };
 
-const undoMasking = (command: UndoCommand): void => {
+const undoMasking = (command: UndoCommand): boolean => {
   selectionController.discard();
   const record = undoRecord;
   const current = currentUndoDraftState();
@@ -542,7 +611,7 @@ const undoMasking = (command: UndoCommand): void => {
       scanComposerSafely();
     }
     broadcastUndoError(command);
-    return;
+    return false;
   }
 
   writeInProgress = true;
@@ -572,7 +641,7 @@ const undoMasking = (command: UndoCommand): void => {
   } catch {
     invalidateAfterUncertainWrite();
     broadcastUndoError(command);
-    return;
+    return false;
   } finally {
     writeInProgress = false;
   }
@@ -582,6 +651,8 @@ const undoMasking = (command: UndoCommand): void => {
     operationId: command.operationId,
     resultRevision: revision,
   });
+  backgroundNotice.clearUndo();
+  return true;
 };
 
 const handlePanelCommand = (
@@ -664,10 +735,9 @@ const resetDraftContext = (notifyUndo: boolean): void => {
   writeInProgress = false;
 };
 
-const resumeContent = (baseline: boolean): void => {
-  suppressNoticeOnce = baseline;
+const resumeContent = (): void => {
   backgroundNotice.mount();
-  backgroundNotice.showSearching(null, true);
+  backgroundNotice.showSearching(null);
   activateSelectionInteraction();
 };
 
@@ -685,7 +755,6 @@ const setPanelVisible = (visible: boolean): void => {
   }
   panelVisible = visible;
   backgroundNotice.setPanelVisible(visible);
-  suppressNoticeOnce = !visible;
   resetDraftContext(false);
   broadcast({ type: "HOST_STATUS", state: "SEARCHING" });
   scanComposerSafely();

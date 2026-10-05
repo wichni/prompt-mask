@@ -50,6 +50,10 @@ Pola `patientFirstName` i `patientLastName` są objęte testami jednostkowymi i
 integracyjnymi, ale MED-001-v1 nie zawiera jeszcze osobnych oznaczeń tych
 kategorii. Nie są więc doliczane do powyższych metryk.
 
+Ograniczony zapis obiektu z niecytowanym kluczem, np.
+`{patientName:"Iga Modelowa"}`, ma osobne testy regresyjne poza MED-001-v1;
+nie zmienia powyższych metryk korpusu.
+
 W jednym z sześciu przypadków bez danych do ukrycia wystąpił fałszywy alarm.
 
 | ID | TP | FN | FP | Najważniejszy wynik |

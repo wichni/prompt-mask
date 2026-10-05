@@ -6,6 +6,7 @@ afterEach(() => {
   document
     .querySelectorAll("#prompt-mask-manual-shortcut")
     .forEach((element) => element.remove());
+  vi.restoreAllMocks();
 });
 
 describe("manual mask shortcut", () => {
@@ -84,6 +85,34 @@ describe("manual mask shortcut", () => {
     );
 
     expect(observed).toHaveBeenCalledWith(true);
+    shortcut.unmount();
+  });
+
+  it("keeps the selection control clear of the page bar", () => {
+    const composer = document.createElement("textarea");
+    document.body.append(composer);
+    vi.spyOn(composer, "getBoundingClientRect").mockReturnValue({
+      left: 500,
+      right: 1_100,
+      top: 700,
+      bottom: 770,
+    } as DOMRect);
+    vi.spyOn(window, "innerWidth", "get").mockReturnValue(1_440);
+    vi.spyOn(window, "innerHeight", "get").mockReturnValue(900);
+    const shortcut = new ManualMaskShortcut(vi.fn(), {
+      getAvoidRect: () => ({
+        left: 780,
+        right: 1_100,
+        top: 652,
+        bottom: 692,
+      } as DOMRect),
+      shadowMode: "open",
+    });
+
+    shortcut.show(composer, 11);
+
+    expect(shortcut.element.style.left).toBe("500px");
+    expect(shortcut.element.style.top).toBe("658px");
     shortcut.unmount();
   });
 });

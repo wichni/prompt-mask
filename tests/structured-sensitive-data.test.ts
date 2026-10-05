@@ -26,6 +26,38 @@ describe("structured sensitive-data field detector", () => {
     ]);
   });
 
+  it("detects exact unquoted object keys and masks only their values", () => {
+    const text =
+      '{patientName:"Żaneta Próba", patientFirstName:"Iga", patientLastName:"Modelowa", patientId:"PT-Z19-44", password:"demo@example.com", apiToken:"demo-token-K8x", status:"ACTIVE"}';
+    const detections = detectSensitiveData(text);
+
+    expect(detections).toEqual([
+      expectedDetection(text, "PATIENT_NAME", "Żaneta Próba"),
+      expectedDetection(text, "PATIENT_FIRST_NAME", "Iga"),
+      expectedDetection(text, "PATIENT_LAST_NAME", "Modelowa"),
+      expectedDetection(text, "PATIENT_ID", "PT-Z19-44"),
+      expectedDetection(text, "PASSWORD", "demo@example.com"),
+      expectedDetection(text, "SECRET", "demo-token-K8x"),
+    ]);
+    expect(createMaskingPlan(text, detections)?.text).toBe(
+      '{patientName:"[PATIENT_NAME_1]", patientFirstName:"[PATIENT_FIRST_NAME_1]", patientLastName:"[PATIENT_LAST_NAME_1]", patientId:"[PATIENT_ID_1]", password:"[PASSWORD_1]", apiToken:"[SECRET_1]", status:"ACTIVE"}',
+    );
+  });
+
+  it.each([
+    '{notpatientName:"Iga Modelowa"}',
+    '{patientNameExtra:"Iga Modelowa"}',
+    '{patientName:"[DANE_1]"}',
+    '{patientName:"Iga\\nModelowa"}',
+    '{patientName:"Iga Modelowa"extra}',
+    '{patientName:"Iga Modelowa"',
+    '{patientName:"unfinished}',
+    '{patientName: "Iga Modelowa"' + " ".repeat(33) + "}",
+    'patientName:"Iga Modelowa"}',
+  ])("rejects unsupported unquoted object properties: %s", (text) => {
+    expect(detectStructuredSensitiveData(text)).toEqual([]);
+  });
+
   it("detects quoted names and quoted or bare identifiers in assignments", () => {
     const text =
       "patientName='Łukasz Modelowy'; patientFirstName='Iga'; patientLastName=\"Modelowa\"; patientId=PAT-A7F2-009";

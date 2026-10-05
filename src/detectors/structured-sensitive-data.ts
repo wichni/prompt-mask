@@ -16,6 +16,10 @@ const JSON_FIELD_PATTERN = new RegExp(
   `"(${FIELD_NAMES})"[ \\t\\r\\n]{0,32}:[ \\t\\r\\n]{0,32}"([^"\\\\\\r\\n]{1,128})"`,
   "gu",
 );
+const OBJECT_FIELD_PATTERN = new RegExp(
+  `[{,][ \\t\\r\\n]{0,32}(${FIELD_NAMES})[ \\t\\r\\n]{0,32}:[ \\t\\r\\n]{0,32}"([^"\\\\\\r\\n]{1,128})"(?=[ \\t\\r\\n]{0,32}[,}])`,
+  "gu",
+);
 const ASSIGNMENT_PREFIX_PATTERN = new RegExp(
   `\\b(${FIELD_NAMES})[ \\t]{0,16}=[ \\t]{0,16}`,
   "gu",
@@ -142,8 +146,11 @@ const toDetection = (
   return { kind, start, end: start + value.length, value };
 };
 
-const collectJsonMatches = (text: string): SensitiveDetection[] =>
-  [...text.matchAll(JSON_FIELD_PATTERN)].flatMap((match) => {
+const collectColonMatches = (text: string): SensitiveDetection[] =>
+  [
+    ...text.matchAll(JSON_FIELD_PATTERN),
+    ...text.matchAll(OBJECT_FIELD_PATTERN),
+  ].flatMap((match) => {
     const value = match[2];
     if (value === undefined) return [];
     const detection = toDetection(match, value);
@@ -173,6 +180,6 @@ export const detectStructuredSensitiveData = (
   text: string,
 ): SensitiveDetection[] =>
   [
-    ...collectJsonMatches(text),
+    ...collectColonMatches(text),
     ...collectAssignmentMatches(text),
   ].sort((left, right) => left.start - right.start);

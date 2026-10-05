@@ -59,7 +59,7 @@ describe("content lifecycle", () => {
     document.dispatchEvent(new Event("visibilitychange"));
     document.dispatchEvent(new Event("visibilitychange"));
     document.dispatchEvent(new Event("input", { bubbles: true }));
-    expect(onResume.mock.calls).toEqual([[false], [true]]);
+    expect(onResume.mock.calls).toEqual([[], []]);
     expect(onInput).toHaveBeenCalledOnce();
 
     controller.dispose();

@@ -1,0 +1,123 @@
+promptMask — instalacja i użytkowanie
+Wersja 0.1.0 | Materiały konkursowe | 05.10.2026
+
+CO ZNAJDUJE SIĘ W PACZCE
+
+- rozszerzenie/ — gotowe pliki rozszerzenia, w tym manifest.json i assets/.
+- OPIS-PROJEKTU.txt — cel, funkcje, technologia, prywatność i ograniczenia.
+- INSTRUKCJA.txt — ten dokument.
+- SCENARIUSZ-DEMONSTRACJI.txt — syntetyczne przykłady i oczekiwane wyniki.
+- DOKUMENTACJA.pdf — powyższe trzy dokumenty w formacie do czytania i druku.
+
+WYMAGANIA
+
+Komputer z Chrome 142 lub nowszym, możliwość ładowania rozszerzeń w trybie
+deweloperskim i dostęp do https://chatgpt.com/. Wersję Chrome sprawdzisz
+w menu przeglądarki: Pomoc → Google Chrome — informacje.
+
+Do instalacji gotowej paczki nie potrzebujesz Node.js, npm, terminala,
+klucza API ani uruchamiania lokalnego serwera. Jeśli dostęp do edytora ChatGPT
+wymaga logowania, zaloguj się bezpośrednio w serwisie. Samo rozszerzenie nie
+wymaga osobnego konta. Edge nie ma potwierdzonego pełnego odbioru tej paczki.
+
+INSTALACJA KROK PO KROKU
+
+1. Zapisz ZIP na komputerze i rozpakuj całe archiwum do zwykłego folderu.
+   Nie próbuj instalować rozszerzenia bezpośrednio ze środka ZIP-a.
+
+2. Otwórz Chrome. W pasku adresu wpisz chrome://extensions i naciśnij Enter.
+
+3. Włącz przełącznik „Tryb deweloperski”.
+
+4. Kliknij „Załaduj rozpakowane”. Wybierz folder rozszerzenie wewnątrz
+   rozpakowanego pakietu. Właśnie w nim ma znajdować się manifest.json.
+   Nie wybieraj folderu nadrzędnego z dokumentami ani samego pliku manifestu.
+
+5. Sprawdź, czy pojawiła się karta promptMask i rozszerzenie jest włączone.
+
+6. W menu rozszerzeń Chrome (ikona puzzla) możesz przypiąć promptMask,
+   aby jego ikona była stale widoczna przy pasku adresu.
+
+7. Otwórz https://chatgpt.com/. Jeżeli strona była otwarta podczas instalacji,
+   odśwież ją. Przejdź do nowej rozmowy z dostępnym polem wiadomości.
+
+8. Wpisz email=demo@example.com. Po analizie powinno pojawić się wykrycie
+   e-maila. Kliknij ikonę promptMask, aby zobaczyć panel boczny.
+   Nie wysyłaj wiadomości — demonstracja działa na szkicu.
+
+Nie usuwaj ani nie przenoś folderu rozszerzenie po instalacji. Chrome ładuje
+pliki z tej lokalizacji. Dokumenty możesz czytać niezależnie od przeglądarki.
+
+CODZIENNE UŻYCIE
+
+Wpisuj lub wklejaj tekst do zwykłego edytora ChatGPT. Analiza działa na
+widocznej obsługiwanej karcie. Przy otwartym panelu sprawdź listę „Do
+sprawdzenia”. Kliknij „Maskuj” przy wybranej pozycji albo „Maskuj wszystkie
+(N)”, aby zatwierdzić całą aktualną listę. Oznaczenia zastępują konkretne
+wartości, np. adres e-mail zostaje zmieniony na [EMAIL_1].
+
+Przy schowanym panelu dodatnia liczba wykryć pokazuje pasek przy edytorze.
+Kliknięcie przycisku typu, np. „E-mail · 1”, maskuje wszystkie jego bieżące
+wystąpienia. Kliknięcie licznika otwiera panel. Pusty szkic i wynik bez wykryć
+nie pokazują licznika. Po podmianie może pozostać lokalne „Cofnij”.
+
+Jeżeli detektor nie rozpoznał fragmentu, zaznacz go w polu wiadomości i użyj
+skrótu [•••] przy edytorze lub „Maskuj zaznaczenie” w panelu. Zmieni się tylko
+wskazany fragment, na oznaczenie [DANE_N]. Zaznaczenie nie może być puste,
+składać się z samych białych znaków ani nachodzić na oznaczenie promptMask.
+
+COFANIE I ZMIANA SZKICU
+
+„Cofnij” przywraca tekst sprzed ostatniej potwierdzonej operacji. Jest to
+jeden poziom cofania, dostępny wyłącznie w tym samym niezmienionym szkicu.
+Edycja, wysłanie, zmiana rozmowy, pola, aktywnej karty lub kontekstu mogą
+unieważnić cofanie. Zamknięcie panelu usuwa poprzedni rekord; otwarcie panelu
+po lokalnej operacji również rozpoczyna nową sesję. Do demonstracji cofnij
+operację od razu, bez przełączania panelu i bez dopisywania tekstu.
+
+Po błędzie nie zakładaj, że tekst został poprawnie zmieniony. Sprawdź szkic.
+Niepewny zapis unieważnia stare decyzje i cofanie; rozszerzenie nie wykonuje
+automatycznego przywracania wcześniejszej treści.
+
+PRZED WYSŁANIEM WIADOMOŚCI
+
+Przeczytaj cały wynik, łącznie z fragmentami bez automatycznych propozycji.
+„Brak wykryć” nie oznacza pełnej anonimizacji. Wiadomość wysyłasz samodzielnie;
+rozszerzenie nie uruchamia „Wyślij” ani nie blokuje natywnego wysyłania.
+
+Tekst trafia do natywnego edytora ChatGPT i może zostać odczytany przez stronę
+przed maskowaniem. Do testów używaj wyłącznie danych syntetycznych z dołączonego
+scenariusza. Nie wklejaj rzeczywistych danych pacjentów ani prawdziwych haseł.
+
+ROZWIĄZYWANIE PROBLEMÓW
+
+Chrome nie znajduje manifestu: upewnij się, że ZIP został rozpakowany,
+a wybrany folder rozszerzenie bezpośrednio zawiera manifest.json.
+
+Chrome zgłasza wymaganą nowszą wersję: sprawdź i zaktualizuj przeglądarkę.
+Manifest tej paczki wymaga co najmniej wersji 142.
+
+Brak przycisku „Załaduj rozpakowane”: sprawdź „Tryb deweloperski”. Zarządzana
+przeglądarka firmowa może blokować tę instalację; wtedy potrzebujesz profilu
+lub komputera, na którym taka instalacja jest dozwolona.
+
+Brak panelu lub wykryć: sprawdź, czy promptMask jest włączony, jesteś na
+https://chatgpt.com/, a pole wiadomości jest dostępne. Odśwież stronę po
+instalacji i przetestuj email=demo@example.com. Brak paska przy pustym szkicu
+lub tekście bez wykryć jest oczekiwany. Panel otwórz ikoną rozszerzenia.
+
+Nie znaleziono pola lub operacja jest niedostępna: upewnij się, że szkic nie
+przekracza limitu 12 000 jednostek UTF-16. Struktura edytora może nie być
+obsługiwana po zmianie strony ChatGPT. Rozszerzenie wtedy odmawia podmiany.
+
+Brak „Cofnij”: sprawdź, czy szkic lub kontekst nie zmienił się od operacji.
+Powrót do identycznego tekstu nie przywraca wygasłego rekordu.
+
+AKTUALIZACJA I USUNIĘCIE
+
+Po zastąpieniu plików w folderze rozszerzenie nową wersją kliknij przycisk
+odświeżenia karty promptMask w chrome://extensions, potem odśwież ChatGPT.
+Aby odinstalować, kliknij „Usuń” na karcie promptMask i odśwież ChatGPT.
+
+Opis sposobu ładowania lokalnych rozszerzeń w dokumentacji Chrome:
+https://developer.chrome.com/docs/extensions/get-started/tutorial/hello-world#load-unpacked

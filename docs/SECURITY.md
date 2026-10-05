@@ -38,7 +38,8 @@ trafiają do trwałego magazynu.
 ```text
 natywny edytor ChatGPT
   → lokalne detektory w content scripcie
-    ├→ liczba w kontrolce strony przy schowanym panelu
+    ├→ liczba i liczności typów w kontrolce strony przy schowanym panelu
+    │  → lokalna decyzja o zamaskowaniu wszystkich bieżących wykryć typu
     └→ ukryte podglądy w panelu
        → decyzja użytkownika z listą id, sesją szkicu i wersją
   → walidacja aktualnego tekstu i wszystkich wybranych zakresów
@@ -62,13 +63,16 @@ kontrolki, ukryć go, usunąć lub imitować jego wygląd, dlatego ikonka nie je
 wskaźnikiem zaufania ani granicą bezpieczeństwa. Pełna kontrolka w panelu
 pozostaje dostępna.
 
-Przy schowanym panelu i dodatniej liczbie wykryć content script dodaje osobny
-licznik i dymek w zamkniętym Shadow DOM. Przy pustym szkicu, zwykłym tekście,
-trwającej lub niedostępnej analizie nie pokazuje tych kontrolek. Zawierają one
-wyłącznie bieżącą liczbę, stałe teksty i natywne przyciski; nie zawierają szkicu,
-podglądów, typów wykryć, identyfikatorów ani URL. Aktywacja wymaga `isTrusted`.
-Strona może host ukryć, usunąć lub imitować, więc licznik również nie jest
-kontrolką bezpieczeństwa.
+Przy schowanym panelu i dodatniej liczbie wykryć content script dodaje pasek w
+zamkniętym Shadow DOM. Pokazuje łączną liczbę oraz typy i ich liczności, ale nie
+pokazuje szkicu, podglądów, wykrytych wartości, identyfikatorów ani URL.
+Przy pustym szkicu, zwykłym tekście, trwającej lub niedostępnej analizie pasek
+nie pokazuje licznika; po lokalnej podmianie może pokazać samo „Cofnij”.
+Kliknięcie typu wymaga `isTrusted` i wskazuje zapamiętaną w content scripcie
+sesję oraz rewizję. Przed jednym zapisem wszystkie bieżące wykrycia tego typu
+są ponownie walidowane wspólną ścieżką maskowania. Nie powstaje komunikat do
+panelu ani workera z surowymi danymi. Strona może host ukryć, usunąć lub
+imitować, więc pasek nie jest kontrolką bezpieczeństwa.
 
 Prawo do decyzji z panelu jest związane z jednym bieżącym, zweryfikowanym portem
 i jego komunikatem `READY`. Poprawny sygnał `CLOSED` odbiera je lokalnie od
@@ -88,7 +92,7 @@ utrzymywany w storage i nie stanowi źródła prawdy o szkicu.
 Analiza działa tylko w widocznym dokumencie ChatGPT. `visibilitychange` i
 `pagehide` zatrzymują observer, anulują RAF i timery, usuwają kontrolki oraz
 unieważniają szkic, zaznaczenie i cofanie. `pageshow` i powrót do karty tworzą
-świeży punkt odniesienia bez ponowienia starego dymka. Uśpienie service workera
+świeży punkt odniesienia bez ponowienia starej decyzji. Uśpienie service workera
 nie zatrzymuje analizy: worker nie przechowuje wyników, map ani stanu szkicu i
 nie jest utrzymywany przy życiu.
 
@@ -102,8 +106,8 @@ Przed pierwszym zapisem DOM podmiana nie zachodzi, gdy:
   i jawnie dozwolone elementy liniowe,
 - decyzja ma nieznany typ lub dodatkowe pola,
 - komenda panelu nie pochodzi z bieżącego panelu rozszerzenia potwierdzonego
-  przez `READY` i widocznego albo lokalna akcja `[•••]` nie pochodzi z
-  zaufanego kliknięcia bieżącej kontrolki,
+  przez `READY` i widocznego albo lokalna akcja nie pochodzi z zaufanego
+  kliknięcia bieżącej kontrolki `[•••]` lub przycisku typu,
 - identyfikator sesji lub wersja decyzji nie odpowiada bieżącemu szkicowi,
 - zbiorcza decyzja nie odpowiada dokładnie aktualnej liście propozycji,
 - bieżący zakres nie zawiera wcześniej wykrytej wartości,
@@ -140,7 +144,7 @@ wysłać surowy tekst, dlatego UI nie może sugerować pełnej ochrony.
 | XSS przez wykrytą wartość | React i operacje na węzłach tekstowych; `innerHTML` jest wyłącznie odczytywany jako lokalna sygnatura struktury, nigdy przypisywany ani wykonywany |
 | wyciek przez komunikat | ścisłe typy `unknown`; panel dostaje tylko ukryty podgląd |
 | przejęcie routingu otwarcia panelu | worker sprawdza `sender.id`, kartę nadawcy, główną ramkę i dokładny origin dokumentu oraz — jeśli Chrome go udostępnia — URL karty; `windowId` bierze z kontekstu nadawcy, a komunikat nie przyjmuje celu |
-| wyciek przez licznik lub dymek | wyłącznie liczba i stałe teksty ustawiane przez `textContent`; brak surowych danych w DOM i komunikacie workera |
+| wyciek przez pasek strony | wyłącznie liczby, stałe nazwy typów i komunikaty ustawiane przez `textContent`; brak surowych danych w DOM i komunikacie workera |
 | stary stan po ukryciu karty lub panelu | natychmiastowe lokalne odebranie uprawnień bieżącego portu, unieważnienie sesji, zaznaczenia i cofania oraz nowa sesja przed kolejną decyzją |
 | spóźniony sygnał widoczności | generacja osobna dla okna w workerze oraz identyfikator instancji i rosnący numer sygnału; starszy wynik zapytania i wycofane źródło są odrzucane |
 | obcy panel lub komenda | dokładny `sender.id`, URL panelu i allowlista pól |
@@ -174,15 +178,16 @@ wysłać surowy tekst, dlatego UI nie może sugerować pełnej ochrony.
   `scheme://user:` nie jest klasyfikowany jako adres,
 - telefon: dziewięć cyfr, opcjonalne `+48`, spacje albo myślniki.
 - nazwa pacjenta: wartość dokładnego pola `patientName`, `patientFirstName` lub
-  `patientLastName` w JSON albo cytowanym przypisaniu `klucz=wartość`; bez
-  zgadywania nazw w swobodnym tekście,
-- identyfikator pacjenta: wartość dokładnego pola `patientId` w JSON albo
-  przypisaniu `klucz=wartość`,
-- hasło: wartość dokładnego pola `password` w JSON albo przypisaniu
-  `klucz=wartość`; samo słowo `password` nie jest wykryciem.
+  `patientLastName` w JSON, ograniczonym zapisie obiektu z niecytowanym kluczem
+  albo cytowanym przypisaniu `klucz=wartość`; bez zgadywania nazw w swobodnym
+  tekście,
+- identyfikator pacjenta: wartość dokładnego pola `patientId` w JSON, takim
+  zapisie obiektu albo przypisaniu `klucz=wartość`,
+- hasło: wartość dokładnego pola `password` w JSON, takim zapisie obiektu albo
+  przypisaniu `klucz=wartość`; samo słowo `password` nie jest wykryciem.
 - sekret techniczny: wartość dokładnego pola `client_secret`, `api_key` lub
-  `apiToken`, wartość po pełnym `Authorization: Bearer` albo hasło pomiędzy
-  użytkownikiem i hostem w `scheme://user:password@host`.
+  `apiToken` w tych samych formatach, wartość po pełnym `Authorization: Bearer`
+  albo hasło pomiędzy użytkownikiem i hostem w `scheme://user:password@host`.
 
 Token po pełnym prefiksie `Authorization: Bearer` obsługuje litery, cyfry,
 `-`, `.`, `_`, `~`, `+`, `/` i końcowe `=` do 128 jednostek UTF-16. Koniec
@@ -193,9 +198,14 @@ nie sprawdza tokenu u wystawcy.
 
 Pola strukturalne są rozpoznawane wyłącznie w ograniczonym formacie i nie
 obsługują dowolnych aliasów, złożonych ucieczek ani sekretów bez jawnej nazwy
-pola. Kompletna wartość dokładnego pola `password` lub sekretu technicznego ma
-pierwszeństwo przed zawartym w niej dopasowaniem PESEL-u, e-maila lub telefonu i
-jako jedyna trafia do listy propozycji. Cytowane przypisanie musi mieć zgodne
+pola. Zapis obiektu bez cudzysłowów wokół klucza wymaga `{` lub `,` przed
+dokładną nazwą pola, dwukropka oraz podwójnie cytowanej wartości; po niej musi
+być `,` lub `}`. Białe znaki wokół klucza, dwukropka i wartości są ograniczone
+do 32 znaków. Cały obiekt nie jest parsowany, więc samo dopasowanie nie dowodzi
+poprawności składni JavaScript. Kompletna wartość dokładnego pola `password` lub
+sekretu technicznego ma pierwszeństwo przed zawartym w niej dopasowaniem
+PESEL-u, e-maila lub telefonu i jako jedyna trafia do listy propozycji.
+Cytowane przypisanie musi mieć zgodne
 domknięcie i nie może zawierać sekwencji z backslashem; błędny zapis nie daje
 częściowego dopasowania bez cudzysłowów. Nagłówek Bearer wymaga dokładnej nazwy
 `Authorization`, a hasło URI — schematu, użytkownika i hosta. Istniejące

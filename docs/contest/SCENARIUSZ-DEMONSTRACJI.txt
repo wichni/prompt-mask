@@ -1,0 +1,102 @@
+promptMask — scenariusz demonstracji
+Wersja 0.1.0 | Materiały konkursowe | 05.10.2026
+
+PRZYGOTOWANIE
+
+Zainstaluj paczkę zgodnie z INSTRUKCJA.txt. Otwórz nową rozmowę na ChatGPT.
+Wszystkie poniższe dane są syntetyczne. Nie wysyłaj wiadomości; demonstracja
+dotyczy szkicu. Przed każdym scenariuszem wyczyść pole i wklej nowy przykład.
+To instrukcja sprawdzenia, a nie raport wykonanego odbioru w przeglądarce.
+
+1. PODSTAWOWE WYKRYCIE I POJEDYNCZE MASKOWANIE
+
+Wklej:
+email=demo@example.com
+
+Otwórz panel ikoną promptMask. Oczekuj jednej propozycji „E-mail” z ukrytym
+podglądem. Kliknij „Maskuj” przy tej propozycji. Etykieta email= ma pozostać,
+a adres ma zostać zastąpiony oznaczeniem [EMAIL_N]. Liczba wykryć ma spaść
+do zera. Kliknij od razu „Cofnij”: ma wrócić dokładny tekst i propozycja.
+
+2. POLA PACJENTA, HASŁO I MASKOWANIE ZBIORCZE
+
+Wklej:
+{"patientName":"Iga Modelowa","patientFirstName":"Iga","patientLastName":"Modelowa","patientId":"PT-DEMO-01","password":"P@ss-demo-7!Q","error":"E_17"}
+
+Oczekuj pięciu propozycji: nazwy pacjenta, imienia, nazwiska, identyfikatora
+i hasła. Kliknij „Maskuj wszystkie (5)”. Wartości pięciu pól mają zmienić się
+w oznaczenia odpowiednich typów. Nazwy kluczy, cudzysłowy, separatory oraz
+"error":"E_17" mają pozostać. Wynik ma zachować składnię JSON.
+
+Oczekiwane typy oznaczeń to [PATIENT_NAME_N], [PATIENT_FIRST_NAME_N],
+[PATIENT_LAST_NAME_N], [PATIENT_ID_N] i [PASSWORD_N]. N oznacza numer nadany
+w aktualnym szkicu; nie należy wymagać numeru 1 po wcześniejszych operacjach.
+Kliknij „Cofnij” przed edycją: cały przykład ma wrócić jednym kliknięciem.
+
+3. SEKRETY TECHNICZNE
+
+Wklej:
+client_secret=demo-client-Z8x!; api_key=sk_demo_A1b2C3d4; Authorization: Bearer demo.jwt.token-7X; postgresql://tester:demo-db-P4ss@db.invalid/clinic
+
+Oczekuj czterech propozycji „Sekret”, z podglądem •••. Maskowanie zbiorcze
+ma zmienić cztery wartości w [SECRET_N], zachowując nazwy pól, prefiks
+Authorization: Bearer i strukturę URI. Nie może zamaskować całego adresu URI
+zamiast samego hasła. Następnie sprawdź dokładny powrót po „Cofnij”.
+
+4. RĘCZNE MASKOWANIE FRAGMENTU BEZ WYKRYCIA
+
+Wklej:
+Kod projektu: ALFA-DEMO. Kod projektu: ALFA-DEMO.
+
+Oczekuj braku automatycznych propozycji. Zaznacz wyłącznie drugie ALFA-DEMO
+w edytorze. Kliknij [•••] albo „Maskuj zaznaczenie”. Tylko drugie wystąpienie
+ma zmienić się na [DANE_N]; pierwsze ma pozostać. Sprawdź „Cofnij”.
+
+5. DZIAŁANIE PRZY SCHOWANYM PANELU
+
+Schowaj panel, wyczyść szkic i wklej:
+email=demo@example.com; telefon=+48 512 345 678
+
+Oczekuj licznika dwóch wykryć i przycisków typu przy edytorze. Kliknij
+„E-mail · 1”. Ma zmienić się tylko adres e-mail; telefon ma pozostać.
+Użyj lokalnego „Cofnij” bez otwierania panelu. Obie wartości mają wrócić.
+Usuń całą treść: licznik wykryć ma zniknąć.
+
+6. JAWNE POLE PESEL I GRANICA DETEKTORA
+
+Wklej najpierw:
+02070803627
+
+Ten syntetyczny numer ma błędną sumę kontrolną. Bez etykiety nie powinien
+dać propozycji PESEL. Następnie zastąp cały szkic tekstem:
+pesel=02070803627
+
+Dokładne pole pesel ma teraz dać jedną propozycję ochrony. Maskowanie ma
+zmienić wyłącznie cyfry i pozostawić pesel=. Detektor nie potwierdza
+poprawności tego numeru. Ten przykład pokazuje świadomą różnicę reguł.
+
+7. OGRANICZENIA AUTOMATYCZNEJ ANALIZY
+
+Wklej:
+Pacjentka Iga Modelowa
+
+Nie oczekuj automatycznego wykrycia nazwy pacjenta w zwykłym zdaniu. Zaznacz
+Iga Modelowa i użyj ręcznego maskowania. Brak propozycji nie stanowi gwarancji
+usunięcia danych osobowych ze swobodnego tekstu.
+
+8. WYGAŚNIĘCIE COFANIA PO EDYCJI
+
+Wklej email=demo@example.com i zamaskuj e-mail. Dopisz własne syntetyczne
+zdanie. „Cofnij” poprzedniej operacji ma przestać być dostępne. Usunięcie
+dopisanego zdania nie powinno przywrócić starego rekordu cofania.
+
+JAK OPISAĆ WYNIK SPRAWDZENIA
+
+Zapisz wersję Chrome, system operacyjny i wynik każdego scenariusza. W razie
+błędu podaj numer scenariusza, komunikat oraz użyty syntetyczny przykład.
+Nie dołączaj prawdziwych danych, cookies, tokenów ani prywatnych logów.
+Osobno odnotuj odbiór Chrome i ewentualny odbiór Edge.
+
+Przed wysłaniem rzeczywistej wiadomości zawsze przejrzyj cały szkic. Strona
+ChatGPT może odczytać tekst przed maskowaniem. promptMask nie wysyła za
+użytkownika i nie gwarantuje pełnej anonimizacji.

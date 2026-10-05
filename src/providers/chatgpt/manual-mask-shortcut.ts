@@ -1,6 +1,9 @@
+import { calculateShortcutPosition } from "./manual-shortcut-position";
+
 const HOST_ID = "prompt-mask-manual-shortcut";
 
 interface ManualMaskShortcutOptions {
+  getAvoidRect?: () => DOMRect | null;
   isTrustedActivation?: (event: MouseEvent) => boolean;
   shadowMode?: ShadowRootMode;
 }
@@ -15,7 +18,7 @@ export class ManualMaskShortcut {
 
   constructor(
     private readonly onMask: (selectionId: number) => void,
-    options: ManualMaskShortcutOptions = {},
+    private readonly options: ManualMaskShortcutOptions = {},
   ) {
     this.isTrustedActivation =
       options.isTrustedActivation ?? ((event) => event.isTrusted);
@@ -100,6 +103,10 @@ export class ManualMaskShortcut {
     return this.host;
   }
 
+  refreshPosition(): void {
+    this.reposition();
+  }
+
   private readonly preserveSelection = (event: PointerEvent): void => {
     if (event.isTrusted) event.preventDefault();
   };
@@ -115,12 +122,13 @@ export class ManualMaskShortcut {
     if (!this.composer || this.selectionId === null) return;
     if (!this.host.isConnected) document.documentElement.append(this.host);
     const rect = this.composer.getBoundingClientRect();
-    const top = Math.max(8, rect.top - 42);
-    const left = Math.max(
-      8,
-      Math.min(window.innerWidth - 56, rect.right - 48),
+    const position = calculateShortcutPosition(
+      rect,
+      this.options.getAvoidRect?.() ?? null,
+      window.innerWidth,
+      window.innerHeight,
     );
-    this.host.style.top = `${top}px`;
-    this.host.style.left = `${left}px`;
+    this.host.style.top = `${position.top}px`;
+    this.host.style.left = `${position.left}px`;
   };
 }

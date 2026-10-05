@@ -1,6 +1,6 @@
 # Status projektu
 
-Stan na: 29.09.2026
+Stan na: 05.10.2026
 Wersja manifestu: `0.1.0`
 
 ## Działa obecnie
@@ -9,10 +9,10 @@ Wersja manifestu: `0.1.0`
   z natywnego zamknięcia globalnego panelu; zamknięcie od razu odbiera staremu
   połączeniu prawo do decyzji oraz unieważnia sesję, zaznaczenie i cofanie,
 - obserwacja natywnego edytora ChatGPT bez dodatkowego pola; przy schowanym
-  panelu i dodatniej liczbie wykryć strona otrzymuje mały responsywny licznik i
-  ograniczony dymek, kotwiczone przy edytorze i mieszczące się w bieżącym
-  viewporcie. Pusty szkic, zwykły tekst oraz trwająca lub niedostępna analiza nie
-  pokazują licznika ani dymka; `[•••]` zależy od poprawnego zaznaczenia,
+  panelu i dodatniej liczbie wykryć strona otrzymuje responsywny pasek z
+  licznikiem i przyciskami typów. Pusty szkic, zwykły tekst oraz trwająca lub
+  niedostępna analiza nie pokazują licznika; `[•••]` zależy od poprawnego
+  zaznaczenia,
 - lokalna analiza tekstu podczas pisania działa na widocznej obsługiwanej karcie
   również wtedy, gdy panel nigdy nie został otwarty albo jest schowany,
 - pauza i świeże wznowienie po `visibilitychange`, `pagehide` i `pageshow`, z
@@ -24,7 +24,8 @@ Wersja manifestu: `0.1.0`
   także wtedy, gdy część lokalna zawiera kolejny znak `=`, oraz odmową dla
   danych uwierzytelniających URI i polskich numerów telefonu,
 - detekcja wartości dokładnych pól `patientName`, `patientFirstName`,
-  `patientLastName`, `patientId` i `password` w JSON oraz ograniczonym formacie
+  `patientLastName`, `patientId` i `password` w JSON, zapisie obiektu z
+  niecytowanym kluczem i podwójnie cytowaną wartością oraz ograniczonym formacie
   `klucz=wartość`, bez zgadywania nazwisk lub haseł w zwykłym tekście; pełna
   wartość hasła wygrywa z zawartym PESEL-em, e-mailem lub telefonem, a błędne
   cytowanie i istniejące oznaczenia nie dają częściowych wykryć,
@@ -35,9 +36,10 @@ Wersja manifestu: `0.1.0`
 - lista propozycji z ikoną typu, nazwą i wyłącznie częściowo ukrytym podglądem,
 - kompaktowy biało-niebieski panel z nazwą ChatGPT, licznikiem blisko góry i
   komunikatem operacji zajmującym miejsce tylko wtedy, gdy istnieje,
-- dymek wyłącznie z bieżącą liczbą wykryć, debounce 700 ms, ograniczeniem do
-  jednego nowego dymka na 10 sekund, automatycznym ukryciem i niezależną obsługą
-  Escape, hoveru i fokusu,
+- przyciski „Telefon · N”, „E-mail · N”, „PESEL · N” i pozostałych obsługiwanych
+  typów maskują wszystkie bieżące wystąpienia wybranego typu jednym zapisem,
+  bez otwierania panelu; pasek ma też lokalne „Cofnij” po udanej podmianie,
+- pasek nie zawiera wykrytych wartości, a `[•••]` wybiera pozycję poza nim,
 - fokus po operacji związany z konkretną sesją i przyciskiem; zmiana celu,
   kontekstu, widoczności lub operacja uruchomiona przez `[•••]` anuluje żądanie,
 - uczciwe rozróżnienie łączenia, pustego szkicu, tekstu bez wykryć, trwającej
@@ -105,18 +107,43 @@ treści. Aktualna funkcja pomaga użytkownikowi zauważyć i zmienić dane przed
   sekretów poza dokładnymi polami i kontekstami opisanymi wyżej, adresów
   pocztowych, dokumentów i innych kategorii,
 - kopiowanie zatwierdzonego wyniku,
-- pakowanie ZIP i obsługa innych dostawców modeli.
+- automatyczne pakowanie ZIP w skryptach npm i obsługa innych dostawców modeli.
+
+## Paczka konkursowa
+
+- Przygotowano lokalny ZIP `release/promptMask-konkurs-0.1.0-2026-10-05.zip`
+  z buildem bieżącego stanu roboczego na bazie
+  `349d555feaacf38590d3f8ad6d2ea7e2bc8123b9`.
+- Pakiet zawiera folder `rozszerzenie`, opis projektu, instrukcję instalacji
+  i użytkowania oraz syntetyczny scenariusz demonstracji w TXT i wspólny PDF.
+  Źródła materiałów są w `docs/contest`; instrukcja przygotowania kolejnej
+  paczki znajduje się w `README.md`.
+- 05.10.2026 lokalnie zaliczono typecheck, 341/341 testów w 20 plikach i build.
+- Sprawdzono CRC i rozpakowanie 10 plików ZIP-a, zgodność kopii z buildem
+  i dokumentami oraz odwołania manifestu i zasobów panelu. PDF obejmuje
+  wszystkie 97 bloków tekstu źródłowego; osiem stron sprawdzono wizualnie.
+  `git diff --check` zaliczono.
+- To artefakt lokalny, poza Git. Nie oznacza publikacji, nowego zdalnego CI
+  ani pełnego odbioru instalacji i działania bieżącej wersji w Chrome/Edge.
 
 ## Dowody automatyczne
 
-- dla bieżącej poprawki `[•••]`: `npm run typecheck`, `npm test` (329/329 w 20
-  plikach), `npm run build` i `git diff --check` — zaliczone lokalnie; testy
-  content scriptu obejmują świeże zaznaczenie bez panelu oraz po jego zamknięciu,
+- dla niecytowanych kluczy obiektu: `npm run typecheck`, `npm test` (341/341 w
+  20 plikach), `npm run build` i `git diff --check` — zaliczone lokalnie; testy
+  obejmują dokładne pola, aliasy i niepełne wartości, zachowanie składni po
+  maskowaniu oraz brak surowej wartości w komunikatach panelu,
+- dla bieżącego paska: `npm run typecheck`, `npm test` (330/330 w 20 plikach),
+  `npm run build` i `git diff --check` — zaliczone lokalnie; regresje obejmują
+  przyciski typów, lokalne cofanie, starą rewizję, brak surowych danych w
+  kontrolkach oraz pozycję paska i `[•••]`,
+- dla poprzedniej poprawki `[•••]`: `npm run typecheck`, `npm test` (329/329 w 20
+  plikach), `npm run build` i `git diff --check` — zaliczone lokalnie przed
+  zastąpieniem dymka paskiem,
 - `npm run typecheck` — zaliczony,
 - `npm run test:medical` — zaliczone testy: 19/19,
-- `npm test -- tests/content-script.test.ts` — zaliczone testy: 58/58 bez
+- `npm test -- tests/content-script.test.ts` — zaliczone testy: 62/62 bez
   timeoutu po zwolnieniu portów i nasłuchów każdej instancji testowej,
-- `npm test` — zaliczone testy: 329/329 w 20 plikach,
+- `npm test` — zaliczone testy: 341/341 w 20 plikach,
 - `npm run build` — zaliczony; manifest nie publikuje już zasobów dodatkowego
   pola, a content script pozostaje samodzielnym bundłem,
 - testy BG-001 obejmują analizę bez panelu, pauzę i świeże wznowienie, ścisłe
@@ -302,6 +329,9 @@ Zrzuty użytkownika z 29.09.2026 pokazują, że `[•••]` pojawia się przy 
 panelu, ale nie przy schowanym i zaznaczonym tekście; nowe testy atrapy DOM
 obejmują wybór przed otwarciem panelu i po jego zamknięciu. Ręczny odbiór tej
 poprawki w Chrome i Edge nadal oczekuje.
+Zrzut użytkownika z 29.09.2026 o 14:21 pokazuje nachodzenie na siebie dymka,
+licznika i `[•••]`. Bieżąca lokalna poprawka zastępuje dymek paskiem i
+pozycjonuje skrót poza nim; odbiór rzeczywistej geometrii czeka.
 
 ## Wymagany odbiór użytkownika
 
@@ -311,7 +341,7 @@ maskowanie, stabilność panelu, brak automatycznego wysłania i poprawną reakc
 po zmianie szkicu. Dla ręcznego wyboru trzeba sprawdzić drugi identyczny
 fragment, oba kierunki, przejście fokusu, Unicode i wiele wierszy, odmowę dla
 oznaczenia, wszystkie warunki wygaśnięcia oraz pozycję, fokus i zachowanie
-kontrolki `[•••]`. Dla licznika i dymka trzeba potwierdzić szeroki i wąski
+kontrolki `[•••]`. Dla paska i skrótu trzeba potwierdzić szeroki i wąski
 viewport, zmianę rozmiaru okna oraz przejście pod edytor przy braku miejsca nad
 nim. Dla cofania trzeba dodatkowo potwierdzić pojedynczą, zbiorczą i ręczną
 operację, wygaśnięcie po edycji i wysłaniu oraz zmianę rozmowy.
@@ -328,9 +358,6 @@ uszkodzonych celów.
 
 ## Bieżący etap
 
-Bieżący etap udostępnia lokalny skrót `[•••]` dla nowego poprawnego zaznaczenia
-także przy schowanym panelu i bez wykryć automatycznych. Zamknięcie panelu nadal
-unieważnia stare zaznaczenie, sesję, cofanie i uprawnienia portu; wybór po
-zamknięciu tworzy nowy rekord. Detektory, reguły maskowania i komunikaty panelu
-pozostają bez zmian. Lokalne typecheck, 329/329 testów, build i kontrola diffu
-przeszły; zdalne CI i ręczny odbiór Chrome/Edge nadal oczekują.
+Etap konkursowy przygotowuje samodzielną paczkę gotowego rozszerzenia
+i dokumentację dla jury. Nie zmienia działania rozszerzenia ani granicy danych.
+Zdalne CI i pełny ręczny odbiór Chrome/Edge bieżącego stanu nadal oczekują.

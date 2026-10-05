@@ -2,7 +2,7 @@ export interface ContentLifecycleOptions {
   onDispose: () => void;
   onInput: (event: Event) => void;
   onPause: () => void;
-  onResume: (baseline: boolean) => void;
+  onResume: () => void;
   onScan: () => void;
   onSubmit: (event: Event) => void;
 }
@@ -25,7 +25,7 @@ export class ContentLifecycleController {
     window.addEventListener("pagehide", this.handlePageHide);
     window.addEventListener("pageshow", this.handlePageShow);
     window.addEventListener("unload", this.dispose);
-    this.resume(false);
+    this.resume();
   }
 
   readonly schedule = (): void => {
@@ -52,7 +52,7 @@ export class ContentLifecycleController {
     this.options.onDispose();
   };
 
-  private resume(baseline: boolean): void {
+  private resume(): void {
     if (this.running || this.disposed || document.hidden) return;
     this.running = true;
     document.addEventListener("input", this.options.onInput, true);
@@ -63,7 +63,7 @@ export class ContentLifecycleController {
       characterData: true,
       subtree: true,
     });
-    this.options.onResume(baseline);
+    this.options.onResume();
     this.options.onScan();
   }
 
@@ -83,9 +83,9 @@ export class ContentLifecycleController {
 
   private readonly handleVisibilityChange = (): void => {
     if (document.hidden) this.pause();
-    else this.resume(true);
+    else this.resume();
   };
 
   private readonly handlePageHide = (): void => this.pause();
-  private readonly handlePageShow = (): void => this.resume(true);
+  private readonly handlePageShow = (): void => this.resume();
 }

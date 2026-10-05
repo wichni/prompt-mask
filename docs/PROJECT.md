@@ -67,8 +67,9 @@ pacjentów poza jawnymi polami nadal wymagają osobnego korpusu negatywnego.
 Dowolnego hasła, sekretu lub nazwiska w swobodnym zdaniu nie należy przedstawiać
 jako możliwego do niezawodnego wykrycia.
 
-Ten kierunek nie oznacza, że wszystkie funkcje docelowego prototypu, pilotaż lub
-pakiet instalacyjny są już zaimplementowane.
+Ten kierunek nie oznacza ukończenia wszystkich funkcji docelowego prototypu
+ani rozpoczęcia pilotażu. Stan lokalnej paczki konkursowej i jej weryfikacji
+opisuje `STATUS.md`.
 
 ## Poza pierwszym prototypem
 

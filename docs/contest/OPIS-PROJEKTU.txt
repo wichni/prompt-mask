@@ -1,0 +1,115 @@
+promptMask — opis projektu
+Wersja 0.1.0 | Materiały konkursowe | 05.10.2026
+
+CEL PROJEKTU
+
+promptMask to prototyp rozszerzenia przeglądarkowego, które lokalnie analizuje
+tekst wpisywany lub wklejany do natywnego edytora ChatGPT. Wskazuje wybrane
+dane osobowe i sekrety techniczne oraz pozwala użytkownikowi zastąpić je
+oznaczeniami przed świadomym wysłaniem wiadomości.
+
+PROBLEM I ODBIORCY
+
+Opisy błędów, logi i przykładowe rekordy mogą zawierać dane pacjentów,
+identyfikatory, dane kontaktowe albo hasła. Przeklejając taki materiał do
+narzędzia AI, łatwo pominąć pojedynczą wartość. Pierwszymi odbiorcami projektu
+są programiści i testerzy systemów medycznych. Rozszerzenie wspiera przegląd
+szkicu, zachowując kontekst techniczny potrzebny do opisania problemu.
+
+Użytkownik pracuje w znanym edytorze ChatGPT. Nie musi przenosić tekstu do
+osobnego formularza. Może przejrzeć propozycje w panelu, zamaskować jeden
+fragment, wszystkie aktualne wykrycia albo samodzielnie zaznaczony tekst.
+
+DOSTĘPNE FUNKCJE
+
+- Lokalna analiza podczas pisania na widocznej karcie ChatGPT, także przy
+  schowanym panelu bocznym.
+- Panel z typami danych i ukrytymi podglądami wartości.
+- Maskowanie pojedynczej propozycji i całej aktualnej listy.
+- Pasek przy edytorze pozwalający maskować wszystkie wykrycia jednego typu.
+- Ręczne maskowanie zaznaczenia, także bez automatycznych wykryć.
+- Jeden poziom cofnięcia ostatniej udanej operacji w niezmienionym szkicu.
+- Ponowna kontrola tekstu i kontekstu przed podmianą; stare propozycje nie
+  uprawniają do zmiany nowszego szkicu.
+- Brak automatycznego wysyłania wiadomości.
+
+OBSŁUGIWANE DANE
+
+PESEL: samodzielny numer z poprawną datą i sumą kontrolną; w dokładnym polu
+pesel także 11 cyfr niespełniających tej walidacji. Jest to propozycja ochrony
+wartości, a nie potwierdzenie poprawności identyfikatora.
+
+Dane kontaktowe: praktyczne adresy e-mail i polskie numery telefonu.
+
+Dane pacjenta: wartości dokładnych pól patientName, patientFirstName,
+patientLastName i patientId. Nazwiska w swobodnych zdaniach nie są zgadywane.
+
+Hasła i sekrety: dokładne pola password, client_secret, api_key i apiToken,
+wartość po pełnym nagłówku Authorization: Bearer oraz hasło w URI
+scheme://user:password@host.
+
+Pola strukturalne obsługują ograniczone formaty JSON, obiektu z niecytowanym
+kluczem i podwójnie cytowaną wartością oraz przypisań klucz=wartość. Wykrycie
+zależy od formatu i granic wartości. Nie są obsługiwane dowolne aliasy,
+złożone sekwencje ucieczki ani wszystkie możliwe reprezentacje danych.
+
+PRZYKŁAD DZIAŁANIA
+
+Przed maskowaniem:
+{"patientName":"Iga Modelowa","patientId":"PT-DEMO-01","error":"E_17"}
+
+Po maskowaniu obu propozycji:
+{"patientName":"[PATIENT_NAME_1]","patientId":"[PATIENT_ID_1]","error":"E_17"}
+
+Przykład jest syntetyczny. Podmieniane są wartości; klucze i kod błędu
+pozostają. Numery oznaczeń zależą od bieżącego szkicu i wcześniejszych operacji.
+
+PRYWATNOŚĆ I KONTROLA UŻYTKOWNIKA
+
+Analiza i podmiany odbywają się w content scripcie, lokalnie w przeglądarce.
+Surowy szkic, treść zaznaczenia i oryginał potrzebny do cofnięcia nie są
+przekazywane do panelu ani service workera. Panel otrzymuje typy, ukryte
+podglądy i informacje o stanie. Rozszerzenie nie używa storage, nie loguje
+treści, nie dodaje telemetryki ani własnych wywołań sieciowych do modeli.
+
+To ograniczenie dotyczy rozszerzenia. ChatGPT nadal jest usługą internetową.
+Surowy tekst znajduje się w natywnym edytorze i może zostać odczytany przez
+stronę jeszcze przed maskowaniem. promptMask nie gwarantuje pełnej
+anonimizacji ani tego, że dostawca strony nie otrzymał wcześniej treści.
+
+Każda podmiana wymaga jawnej decyzji użytkownika. Rozszerzenie nie klika
+„Wyślij” i nie blokuje wysłania tekstu z nierozpatrzonymi wykryciami.
+„Brak wykryć” oznacza wynik obecnych detektorów, a nie brak wszystkich danych
+wrażliwych. Po operacji należy samodzielnie przejrzeć cały szkic.
+
+TECHNOLOGIA I ZAKRES UPRAWNIEŃ
+
+TypeScript, React, Vite i Vitest; rozszerzenie Chromium w standardzie
+Manifest V3 z panelem bocznym. Czyste detektory i operacje na zakresach tekstu
+są oddzielone od interfejsu oraz integracji z DOM ChatGPT.
+
+Manifest deklaruje dostęp do https://chatgpt.com/* i uprawnienie sidePanel.
+Nie deklaruje dostępu do wszystkich witryn, schowka ani cookies. Wymaga
+Chrome 142 lub nowszego. Edge potrzebuje osobnej weryfikacji kompatybilności.
+
+OGRANICZENIA PROTOTYPU
+
+- Tylko tekst w obsługiwanym natywnym edytorze na https://chatgpt.com/.
+- Limit szkicu: 12 000 jednostek UTF-16; emoji mogą zajmować dwie jednostki.
+- Możliwe pominięcia i fałszywe alarmy; detekcja nie zastępuje przeglądu tekstu.
+- Brak analizy załączników, PDF, obrazów, OCR i głosu.
+- Brak obsługi innych czatów, Firefoksa, Safari i aplikacji mobilnych.
+- Brak trwałej mapy oznaczeń dla całej rozmowy i odtwarzania oryginałów
+  w odpowiedziach modelu.
+- Integracja zależy od struktury strony ChatGPT; zmiana edytora może wymagać
+  aktualizacji rozszerzenia.
+
+STAN WERYFIKACJI PACZKI
+
+05.10.2026 lokalnie zaliczono kontrolę typów, 341 testów w 20 plikach i build.
+Testy integracji używają atrap DOM i API. Nie stanowią pełnego odbioru na
+prawdziwej stronie. Bieżąca paczka nie ma pełnego ręcznego odbioru Chrome/Edge
+ani zdalnego CI jej stanu roboczego. Nie należy traktować jej jako wersji
+produkcyjnej ani certyfikowanego narzędzia ochrony danych.
+
+Materiały instalacyjne i scenariusz demonstracji są dołączone do archiwum.
